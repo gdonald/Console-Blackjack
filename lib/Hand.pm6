@@ -9,8 +9,8 @@ class Hand {
 
     has $!game; # untyped else circular dependency
     has Shoe $!shoe;
-    has Card @.cards is rw;
-    has Bool $.stood is rw;
+    has Card @.cards  is rw;
+    has Bool $.stood  is rw;
     has Bool $.played is rw;
 
     submethod BUILD(:$!game) {
@@ -22,19 +22,10 @@ class Hand {
     }
 
     method is-blackjack {
-	if @.cards.elems != 2 {
-	    return False;
-	}
-
-        if @.cards[0].is-ace && @.cards[1].is-ten {
-            return True;
-        }
-
-        if @.cards[1].is-ace && @.cards[0].is-ten {
-            return True;
-        }
-
-        return False;
+	return False if @.cards.elems != 2;
+	return True  if @.cards[0].is-ace && @.cards[1].is-ten;
+	return True  if @.cards[1].is-ace && @.cards[0].is-ten;
+	return False;
     }
 
     method is-done {
@@ -46,7 +37,6 @@ class Hand {
     }
 
     method deal-card {
-	my Card $c = $!shoe.get-next-card;
-	@.cards.push($c);
+	@.cards.push: $!shoe.get-next-card;
     }
 }

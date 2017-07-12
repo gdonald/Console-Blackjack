@@ -3,6 +3,7 @@ use Hand;
 use Card;
 
 class DealerHand is Hand {
+
     has $!game;
     has Bool $.hide-down-card is rw;
 
@@ -16,14 +17,9 @@ class DealerHand is Hand {
 
         for @.cards.kv -> $k, $card {
             next if $k == 1 && $!hide-down-card;
-
             my Int $tmp_v = $card.value + 1;
             $v = $tmp_v > 9 ?? 10 !! $tmp_v;
-
-            if $count-method == Hand::CountMethod::Soft && $v == 1 && $total < 11 {
-                $v = 11;
-            }
-
+            $v = 11 if $count-method == Hand::CountMethod::Soft && $v == 1 && $total < 11;
             $total += $v;
         }
 
@@ -39,12 +35,12 @@ class DealerHand is Hand {
     }
 
     method draw {
-        print " ";
+        print ' ';
         for @.cards.kv -> $k, $card {
             print $k == 1 && $!hide-down-card ?? Card.faces[13][0] !! $card.draw;
-            print " "; 
+            print ' ';
         }
-        print " ⇒  ";
+        print ' ⇒  ';
         print self.get-value(Hand::CountMethod::Soft);
     }
 }

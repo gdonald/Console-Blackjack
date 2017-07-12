@@ -82,46 +82,25 @@ class PlayerHand is Hand {
     }
 
     method can-split {
-        if $.stood || PlayerHand.total-player-hands >= PlayerHand.max-player-hands {
-            return False;
-        }
-
-        if $!game.money < $!game.all-bets + $!bet {
-            return False;
-        }
-
-        if @.cards.elems == 2 && @.cards[0].value == @.cards[1].value {
-            return True
-        }
-
+        return False if $.stood || PlayerHand.total-player-hands >= PlayerHand.max-player-hands;
+        return False if $!game.money < $!game.all-bets + $!bet;
+        return True  if @.cards.elems == 2 && @.cards[0].value == @.cards[1].value;
         return False;
     }
 
     method can-dbl {
-        if $!game.money < $!game.all-bets + $!bet {
-            return False;
-        }
-
-        if $.stood || @.cards.elems != 2 || self.is-busted || self.is-blackjack {
-            return False;
-        }
-
+        return False if $!game.money < $!game.all-bets + $!bet;
+        return False if $.stood || @.cards.elems != 2 || self.is-busted || self.is-blackjack;
         return True;
     }
 
     method can-stand {
-        if $.stood || self.is-busted || self.is-blackjack {
-            return False;
-        }
-
+        return False if $.stood || self.is-busted || self.is-blackjack;
         return True;
     }
 
     method can-hit {
-        if $.played || $.stood || 21 == self.get-value(Hand::CountMethod::Hard) || self.is-busted || self.is-blackjack {
-            return False;
-        }
-
+        return False if $.played || $.stood || 21 == self.get-value(Hand::CountMethod::Hard) || self.is-busted || self.is-blackjack;
         return True;
     }
 
@@ -159,59 +138,51 @@ class PlayerHand is Hand {
         my Int $total = 0;
 
         for @.cards.kv -> $k, $card {
-
             my Int $tmp_v = $card.value + 1;
             $v = $tmp_v > 9 ?? 10 !! $tmp_v;
-
-            if $count-method == Hand::CountMethod::Soft && $v == 1 && $total < 11 {
-                $v = 11;
-            }
-
+            $v = 11 if $count-method == Hand::CountMethod::Soft && $v == 1 && $total < 11;
             $total += $v;
         }
 
-        if $count-method == Hand::CountMethod::Soft && $total > 21 {
-            return self.get-value(Hand::CountMethod::Hard);
-        }
-
+        return self.get-value(Hand::CountMethod::Hard) if $count-method == Hand::CountMethod::Soft && $total > 21;
         return $total;
     }
 
     method draw(Int $index) {
-        print " ";
+        print ' ';
 
         for @.cards -> $card {
             print $card.draw;
-            print " ";
+            print ' ';
         }
 
-        print " ⇒  ";
+        print ' ⇒  ';
         print self.get-value(Hand::CountMethod::Soft);
-        print "  ";
+        print '  ';
 
         if $!status == Hand::Status::Lost {
-            print "-";
+            print '-';
         } else {
-            print "+";
+            print '+';
         }
 
-        print "\$";
+        print '$';
         print sprintf('%.2f', $!bet);
 
         if !$.played && $index == $!game.current-player-hand {
-            print " ⇐";
+            print ' ⇐';
         }
 
-        print "  ";
+        print '  ';
 
         if $!status == Hand::Status::Lost {
-            print self.is-busted ?? "Busted!" !! "Lose!";
+            print self.is-busted ?? 'Busted!' !! 'Lose!';
         } elsif $!status == Hand::Status::Won {
-            print self.is-blackjack ?? "Blackjack!" !! "Won!";
+            print self.is-blackjack ?? 'Blackjack!' !! 'Won!';
         } elsif $!status == Hand::Status::Push {
-            print "Push";
+            print 'Push';
         }
 
-        print "\n\n";
+        say "\n";
     }
 }

@@ -6,6 +6,7 @@ use Hand;
 use Card;
 
 class Game {
+
     has Str $!save-file;
     has Rat $!starting-money;
     has Rat $!min-bet;
@@ -57,9 +58,7 @@ class Game {
 
     method need-to-play-dealer-hand {
         for @!player-hands -> $h {
-            if !($h.is-busted || $h.is-blackjack) {
-                return True;
-            }
+            return True if !($h.is-busted || $h.is-blackjack);
         }
 
         return False;
@@ -114,9 +113,7 @@ class Game {
     }
 
     method play-dealer-hand {
-        if $!dealer-hand.is-blackjack {
-            $!dealer-hand.hide-down-card = False;
-        }
+        $!dealer-hand.hide-down-card = False if $!dealer-hand.is-blackjack;
 
         if !self.need-to-play-dealer-hand {
             $!dealer-hand.played = True;
@@ -131,7 +128,6 @@ class Game {
 
         while $soft-count < 18 && $hard-count < 17 {
             $!dealer-hand.deal-card;
-
             $soft-count = $!dealer-hand.get-value(Hand::CountMethod::Soft);
             $hard-count = $!dealer-hand.get-value(Hand::CountMethod::Hard);
         }
@@ -141,9 +137,7 @@ class Game {
     }
 
     method deal-new-hand {
-	if $!shoe.need-to-shuffle {
-	    $!shoe.shuffle;
-	}
+	$!shoe.shuffle if $!shoe.need-to-shuffle;
 
 	@!player-hands = [];
         PlayerHand.total-player-hands = 0;
@@ -165,13 +159,8 @@ class Game {
             return;
         }
 
-        if $!dealer-hand.is-done {
-            $!dealer-hand.hide-down-card = False;
-        }
-
-        if $player-hand.is-done {
-            $!dealer-hand.hide-down-card = False;            
-        }
+        $!dealer-hand.hide-down-card = False if $!dealer-hand.is-done;
+        $!dealer-hand.hide-down-card = False if  $player-hand.is-done;
 
         if $!dealer-hand.is-done || $player-hand.is-done {
             self.pay-hands;
@@ -187,12 +176,10 @@ class Game {
 
     method draw-hands {
         self.clear;
-        
-        print "\n Dealer:\n";
-        $!dealer-hand.draw;
-        print "\n";
 
-        print "\n Player \$";
+        say "\n Dealer:";
+        $!dealer-hand.draw;
+        print "\n\n Player \$";
         print sprintf('%.2f', $!money);
         print "\n";
 
@@ -202,7 +189,7 @@ class Game {
     }
 
     method ask-insurance {
-        my Str $opts = " Insurance?  (Y) Yes  (N) No";
+        my Str $opts = ' Insurance?  (Y) Yes  (N) No';
         say $opts;
 
         my Bool $br = False;
@@ -233,7 +220,6 @@ class Game {
         $h.played = True;
         $h.payed = True;
         $h.status = Hand::Status::Lost;
-
         $!money -= $h.bet;
 
         self.draw-hands;
@@ -291,7 +277,7 @@ class Game {
     }
 
     method draw-player-bet-options {
-        say " (D) Deal Hand  (B) Change Bet  (Q) Quit";
+        say ' (D) Deal Hand  (B) Change Bet  (Q) Quit';
 
         my Bool $br = False;
         my Str $c;
@@ -319,10 +305,10 @@ class Game {
         self.clear;
         self.draw-hands;
 
-        my Str $opts = "  Current Bet: \$";
+        my Str $opts = '  Current Bet: $';
         $opts ~= $!current-bet;
         $opts ~= "\n";
-        $opts ~= "  Enter New Bet: \$";
+        $opts ~= '  Enter New Bet: $';
 
         my Str $bet = prompt $opts;
         $!current-bet = $bet.Rat;
@@ -349,8 +335,7 @@ class Game {
             my $contents = $fh.slurp-rest;
             $fh.close;
 
-            my Str @a = $contents.split("|");
-
+            my Str @a = $contents.split('|');
             $!num-decks   = @a[0].Int;
             $!money       = @a[1].Rat;
             $!current-bet = @a[2].Rat;
@@ -360,6 +345,6 @@ class Game {
     }
 
     method clear {
-        shell "export TERM=linux; clear";
+        shell 'export TERM=linux; clear';
     }
 }

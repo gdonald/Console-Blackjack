@@ -25,72 +25,51 @@ class Shoe {
 	for 0..7 -> $x {
             my Int $allowed = @!shuffle-specs[$x].key;
 	    my Int $decks   = @!shuffle-specs[$x].value;
-
-	    if $!num-decks == $decks && $used-cards > $allowed {
-		return True;
-	    }
+	    return True if $!num-decks == $decks && $used-cards > $allowed;
 	}
 
 	return False;
     }
 
     method shuffle {
+	# self.new-sevens;
+	# self.new-eights;
+	# self.new-aces;
+	# self.new-jacks;
+	# self.new-aces-jacks;
 	self.new-regular;
-        # self.new-sevens;
-        # self.new-eights;
-        # self.new-aces;
-        # self.new-jacks;
-        # self.new-aces-jacks;
 	for 0..6 { @!cards = @!cards.pick: *; }
     }
 
     method new-aces-jacks {
-        @!cards = [];
-        for 1 .. $!num-decks * 4 * 13 { for 0..3 -> $suite {
-            my Card $a = Card.new(:value(0), :suite(Card.suites[$suite]), :suite-value($suite));
-	    @!cards.push($a);
-            my Card $j = Card.new(:value(10), :suite(Card.suites[$suite]), :suite-value($suite));
-	    @!cards.push($j);
-	} }
+	self.new-irregular([0, 10]);
     }
 
     method new-jacks {
-        @!cards = [];
-        for 1 .. $!num-decks * 4 * 13 { for 0..3 -> $suite {
-	    my Card $c = Card.new(:value(10), :suite(Card.suites[$suite]), :suite-value($suite));
-	    @!cards.push($c);
-	} }
+	self.new-irregular([10]);
     }
 
     method new-aces {
-        @!cards = [];
-        for 1 .. $!num-decks * 4 * 13 { for 0..3 -> $suite {
-            my Card $c = Card.new(:value(0), :suite(Card.suites[$suite]), :suite-value($suite));
-	    @!cards.push($c);
-	} }
+	self.new-irregular([0]);
     }
 
     method new-eights {
-        @!cards = [];
-        for 1 .. $!num-decks * 4 * 13 { for 0..3 -> $suite {
-            my Card $c = Card.new(:value(7), :suite(Card.suites[$suite]), :suite-value($suite));
-	    @!cards.push($c);
-	} }
+	self.new-irregular([7]);
     }
 
     method new-sevens {
-        @!cards = [];
-        for 1 .. $!num-decks * 4 * 13 { for 0..3 -> $suite {
-            my Card $c = Card.new(:value(6), :suite(Card.suites[$suite]), :suite-value($suite));
-	    @!cards.push($c);
-	} }
+	self.new-irregular([6]);
     }
 
     method new-regular {
+	self.new-irregular([0..12]);
+    }
+
+    method new-irregular(@values) {
 	@!cards = [];
-	for 1 .. $!num-decks { for 0..3 -> $suite { for 0..12 -> $value {
-            my Card $c = Card.new(:value($value), :suite(Card.suites[$suite]), :suite-value($suite));
-	    @!cards.push($c);
+        for 1 .. $!num-decks * 4 * 13 { for 0..3 -> $suite { for @values -> $v {
+            my Card $a = Card.new(:value($v), :suite(Card.suites[$suite]), :suite-value($suite));
+	    @!cards.push($a);
 	} } }
     }
 }
