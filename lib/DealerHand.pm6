@@ -11,7 +11,7 @@ class DealerHand is Hand {
         $!hide-down-card = True;
     }
 
-    method get-value(Hand::CountMethod $count-method) {
+    method get-value(Hand::CountMethod $count-method, --> Int) {
         my Int $v = 0;
         my Int $total = 0;
 
@@ -27,11 +27,11 @@ class DealerHand is Hand {
             return self.get-value(Hand::CountMethod::Hard);
         }
 
-        return $total;
+        $total;
     }
 
-    method up-card-is-ace {
-        return @.cards[0].is-ace;
+    method up-card-is-ace(--> Bool) {
+        @.cards[0].is-ace;
     }
 
     method draw {

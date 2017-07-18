@@ -81,30 +81,28 @@ class PlayerHand is Hand {
         self.process if self.is-done;
     }
 
-    method can-split {
+    method can-split(--> Bool) {
         return False if $.stood || PlayerHand.total-player-hands >= PlayerHand.max-player-hands;
         return False if $!game.money < $!game.all-bets + $!bet;
         return True  if @.cards.elems == 2 && @.cards[0].value == @.cards[1].value;
-        return False;
+        False;
     }
 
-    method can-dbl {
+    method can-dbl(--> Bool) {
         return False if $!game.money < $!game.all-bets + $!bet;
         return False if $.stood || @.cards.elems != 2 || self.is-busted || self.is-blackjack;
-        return True;
+        True;
     }
 
-    method can-stand {
-        return False if $.stood || self.is-busted || self.is-blackjack;
-        return True;
+    method can-stand(--> Bool) {
+        !($.stood || self.is-busted || self.is-blackjack);
     }
 
-    method can-hit {
-        return False if $.played || $.stood || 21 == self.get-value(Hand::CountMethod::Hard) || self.is-busted || self.is-blackjack;
-        return True;
+    method can-hit(--> Bool) {
+        !($.played || $.stood || 21 == self.get-value(Hand::CountMethod::Hard) || self.is-busted || self.is-blackjack);
     }
 
-    method is-done {
+    method is-done(--> Bool) {
         if $.played || $.stood || self.is-blackjack || self.is-busted || 21 == self.get-value(Hand::CountMethod::Soft) || 21 == self.get-value(Hand::CountMethod::Hard) {
             $.played = True;
 
@@ -119,7 +117,7 @@ class PlayerHand is Hand {
             return True;
         }
 
-        return False;
+        False;
     }
 
     method process {
@@ -133,7 +131,7 @@ class PlayerHand is Hand {
         $!game.draw-player-bet-options;
     }
 
-    method get-value(Hand::CountMethod $count-method) {
+    method get-value(Hand::CountMethod $count-method, --> Int) {
         my Int $v = 0;
         my Int $total = 0;
 
@@ -145,7 +143,7 @@ class PlayerHand is Hand {
         }
 
         return self.get-value(Hand::CountMethod::Hard) if $count-method == Hand::CountMethod::Soft && $total > 21;
-        return $total;
+        $total;
     }
 
     method draw(Int $index) {

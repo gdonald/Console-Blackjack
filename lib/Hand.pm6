@@ -17,23 +17,23 @@ class Hand {
         $!shoe = $!game.shoe;
     }
 
-    method is-busted {
-	return self.get-value(Soft) > 21;
+    method is-busted(--> Bool) {
+	self.get-value(Soft) > 21;
     }
 
-    method is-blackjack {
+    method is-blackjack(--> Bool) {
 	return False if @.cards.elems != 2;
 	return True  if @.cards[0].is-ace && @.cards[1].is-ten;
 	return True  if @.cards[1].is-ace && @.cards[0].is-ten;
-	return False;
+	False;
     }
 
-    method is-done {
-	return False;
+    method is-done(--> Bool) {
+	False;
     }
 
-    method get-value(CountMethod $count-method) {
-	return 0;
+    method get-value(CountMethod $count-method, --> Int) {
+	0;
     }
 
     method deal-card {

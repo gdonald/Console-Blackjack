@@ -40,28 +40,28 @@ class Game {
 	self.deal-new-hand;
     }
 
-    method read-one-char {
+    method read-one-char(--> Str) {
         $!tty = "/dev/tty".IO.open;
         shell "stty raw -echo min 1 time 1";
         my Str $c = $!tty.read(1).decode('utf-8');        
         shell "stty sane";
-        return $c;
+        $c;
     }
 
-    method all-bets {
-        return [+] @!player-hands>>.bet
+    method all-bets(--> Rat) {
+        [+] @!player-hands>>.bet
     }
 
-    method more-hands-to-play {
-        return $!current-player-hand < @!player-hands.elems - 1;
+    method more-hands-to-play(--> Bool) {
+        $!current-player-hand < @!player-hands.elems - 1;
     }
 
-    method need-to-play-dealer-hand {
+    method need-to-play-dealer-hand(--> Bool) {
         for @!player-hands -> $h {
             return True if !($h.is-busted || $h.is-blackjack);
         }
 
-        return False;
+        False;
     }
 
     method split-current-hand {

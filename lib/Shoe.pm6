@@ -12,10 +12,10 @@ class Shoe {
     }
 
     method get-next-card {
-	return @!cards.pop;
+	@!cards.pop;
     }
     
-    method need-to-shuffle {
+    method need-to-shuffle(--> Bool) {
 	return True if @!cards.elems == 0;
 
 	my Int $total-cards = $!num-decks * 52;
@@ -28,7 +28,7 @@ class Shoe {
 	    return True if $!num-decks == $decks && $used-cards > $allowed;
 	}
 
-	return False;
+	False;
     }
 
     method shuffle {

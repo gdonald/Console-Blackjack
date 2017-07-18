@@ -24,15 +24,15 @@ class Card {
     submethod BUILD(:$!value, :$!suite, :$!suite-value) {
     }
 
-    method is-ace {
-        return $!value == 0;
+    method is-ace(--> Bool) {
+        $!value == 0;
     }
 
-    method is-ten {
-	return $!value > 9;
+    method is-ten(--> Bool) {
+	$!value > 9;
     }
 
-    method draw {
-	return Card.faces[$!value][$!suite-value];
+    method draw(--> Str) {
+	Card.faces[$!value][$!suite-value];
     }
 }
