@@ -7,4 +7,4 @@ https://perl6.org/downloads/
 ## Run
 perl6 bj.p6
 
-![Blackjack](https://gitlab.com/gdonald/blackjack-p6/raw/master/bj.png)
+![Blackjack](https://raw.githubusercontent.com/gdonald/blackjack-p6/master/bj.png)
