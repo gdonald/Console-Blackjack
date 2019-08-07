@@ -7,7 +7,7 @@ Console Blackjack written in Perl6
 
 #### Run
 ```
-perl6 bj.p6
+./blackjack
 ```
 
 ![Blackjack](https://raw.githubusercontent.com/gdonald/blackjack-perl6/master/bj.png)

@@ -1,7 +1,8 @@
-use Hand;
-use Card;
 
-class DealerHand is Hand {
+use Blackjack::Hand;
+use Blackjack::Card;
+
+class DealerHand is Hand is export {
   has $!game;
   has Bool $.hide-down-card is rw;
 

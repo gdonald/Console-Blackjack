@@ -1,10 +1,13 @@
-use Shoe;
-use DealerHand;
-use PlayerHand;
-use Hand;
-use Card;
 
-class Game {
+unit module Blackjack;
+
+use Blackjack::Shoe;
+use Blackjack::DealerHand;
+use Blackjack::PlayerHand;
+use Blackjack::Hand;
+use Blackjack::Card;
+
+class Game is export {
   has Str $!save-file;
   has Rat $!starting-money;
   has Rat $!min-bet;
@@ -32,9 +35,7 @@ class Game {
     $!dealer-hand = DealerHand.new(game => self);
     $!current-player-hand = 0;
     @!player-hands = [];
-  }
 
-  method run {
     self.deal-new-hand;
   }
 

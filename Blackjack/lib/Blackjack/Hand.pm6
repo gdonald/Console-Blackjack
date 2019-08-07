@@ -1,12 +1,12 @@
-use Shoe;
-use Card;
 
-class Hand {
+use Blackjack::Shoe;
+use Blackjack::Card;
+
+class Hand is export {
   enum CountMethod <Soft Hard>;
   enum Status <Unknown Won Lost Push>;
 
-  has $!game;
-  # untyped else circular dependency
+  has $!game; # untyped else circular dependency
   has Shoe $!shoe;
   has Card @.cards  is rw;
   has Bool $.stood  is rw;

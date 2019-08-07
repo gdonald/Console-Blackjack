@@ -1,6 +1,7 @@
-use Hand;
 
-class PlayerHand is Hand {
+use Blackjack::Hand;
+
+class PlayerHand is Hand is export {
   my Int $.max-player-hands = 7;
   my Int $.total-player-hands = 0;
 

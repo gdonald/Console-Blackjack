@@ -1,4 +1,5 @@
-class Card {
+
+class Card is export {
   my Str @.suites = <Spades Hearts Clubs Diamonds>;
   my Array @.faces = [
     ['🂡', '🂱', '🃁', '🃑'],
@@ -20,9 +21,7 @@ class Card {
   has Int $!suite-value;
   has Str $!suite;
 
-  submethod BUILD(:$!value, :$!suite, :$!suite-value) {
-
-  }
+  submethod BUILD(:$!value, :$!suite, :$!suite-value) {}
 
   method is-ace(--> Bool) {
     $!value == 0;

@@ -1,6 +1,7 @@
-use Card;
 
-class Shoe {
+use Blackjack::Card;
+
+class Shoe is export {
   has Pair @!shuffle-specs;
   has Int $!num-decks;
   has Card @!cards;
