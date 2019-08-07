@@ -15,7 +15,7 @@
     "Console::Blackjack::Shoe": "lib/Console/Blackjack/Shoe.pm6"
   },
   "resources": [],
-  "license": "MIT",
+  "license": "Artistic-2.0",
   "source-url": "git://github.com/gdonald/Console-Blackjack.git",
   "tags": ["Console", "Blackjack", "Game"]  
 }
