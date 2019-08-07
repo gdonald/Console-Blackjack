@@ -1,6 +1,6 @@
 
-use Blackjack::Shoe;
-use Blackjack::Card;
+use Console::Blackjack::Shoe;
+use Console::Blackjack::Card;
 
 class Hand is export {
   enum CountMethod <Soft Hard>;

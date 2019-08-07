@@ -1,11 +1,11 @@
 
 unit module Blackjack;
 
-use Blackjack::Shoe;
-use Blackjack::DealerHand;
-use Blackjack::PlayerHand;
-use Blackjack::Hand;
-use Blackjack::Card;
+use Console::Blackjack::Shoe;
+use Console::Blackjack::DealerHand;
+use Console::Blackjack::PlayerHand;
+use Console::Blackjack::Hand;
+use Console::Blackjack::Card;
 
 class Game is export {
   has Str $!save-file;

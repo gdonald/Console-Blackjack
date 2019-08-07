@@ -1,5 +1,5 @@
 
-use Blackjack::Card;
+use Console::Blackjack::Card;
 
 class Shoe is export {
   has Pair @!shuffle-specs;

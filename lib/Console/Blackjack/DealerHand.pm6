@@ -1,6 +1,6 @@
 
-use Blackjack::Hand;
-use Blackjack::Card;
+use Console::Blackjack::Hand;
+use Console::Blackjack::Card;
 
 class DealerHand is Hand is export {
   has $!game;
