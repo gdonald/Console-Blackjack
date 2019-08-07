@@ -9,7 +9,7 @@ Console Blackjack written in Perl6
 ### Install Blackjack with zef:
 
 ```
-zef install Console-Blackjack
+zef install Console::Blackjack
 ```
 
 ### Run
