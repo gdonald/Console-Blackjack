@@ -1,16 +1,18 @@
 {
-  "name": "Blackjack",
+  "name": "Console::Blackjack",
   "description": "Console Blackjack",
   "version": "1.0.0",
   "perl": "6.d",
-  "auth": "Greg Donald",
+  "auth": "github:gdonald",
+  "authors": ["Greg Donald"],  
   "depends": [],
   "build-depends": [],
   "test-depends": [],
   "provides": {
-    "Blackjack::Blackjack": "lib/Blackjack/Blackjack.pm6"
+    "Console::Blackjack": "lib/Console/Blackjack.pm6"
   },
   "resources": [],
   "license": "MIT",
-  "source-url": "http://github.com/gdonald/blackjack-perl6"
+  "source-url": "git://github.com/gdonald/Console-Blackjack.git",
+  "tags": ["Console", "Blackjack", "Game"]  
 }
