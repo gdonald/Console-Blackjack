@@ -1,5 +1,5 @@
 
-unit module Blackjack;
+unit module Console::Blackjack;
 
 use Console::Blackjack::Shoe;
 use Console::Blackjack::DealerHand;

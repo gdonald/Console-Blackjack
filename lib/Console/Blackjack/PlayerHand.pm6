@@ -1,4 +1,6 @@
 
+unit class Console::Blackjack::PlayerHand;
+
 use Console::Blackjack::Hand;
 
 class PlayerHand is Hand is export {

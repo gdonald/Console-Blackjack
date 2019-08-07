@@ -9,7 +9,10 @@
   "build-depends": [],
   "test-depends": [],
   "provides": {
-    "Console::Blackjack": "lib/Console/Blackjack.pm6"
+    "Console::Blackjack": "lib/Console/Blackjack.pm6",
+    "Console::Blackjack::PlayerHand": "lib/Console/Blackjack/PlayerHand.pm6",
+    "Console::Blackjack::DealerHand": "lib/Console/Blackjack/DealerHand.pm6",
+    "Console::Blackjack::Shoe": "lib/Console/Blackjack/Shoe.pm6"
   },
   "resources": [],
   "license": "MIT",

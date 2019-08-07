@@ -1,4 +1,6 @@
 
+unit class Console::Blackjack::DealerHand;
+
 use Console::Blackjack::Hand;
 use Console::Blackjack::Card;
 
