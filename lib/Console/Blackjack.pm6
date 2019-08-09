@@ -198,10 +198,8 @@ class Game is export {
       $c = self.read-one-char;
 
       given $c {
-        when 'y' { $br = True;
-        self.insure-hand;  }
-        when 'n' { $br = True;
-        self.no-insurance; }
+        when 'y' { $br = True; self.insure-hand;  }
+        when 'n' { $br = True; self.no-insurance; }
         default {
           $br = True;
           self.clear;
@@ -278,7 +276,7 @@ class Game is export {
   }
 
   method draw-player-bet-options {
-    say ' (D) Deal Hand  (B) Change Bet  (Q) Quit';
+    say ' (D) Deal Hand  (B) Change Bet  (O) Options  (Q) Quit';
 
     my Bool $br = False;
     my Str $c;
@@ -287,12 +285,10 @@ class Game is export {
       $c = self.read-one-char;
 
       given $c {
-        when 'd' { $br = True;
-        self.deal-new-hand; }
-        when 'b' { $br = True;
-        self.get-new-bet;   }
-        when 'q' { $br = True;
-        self.clear;         }
+        when 'd' { $br = True; self.deal-new-hand; }
+        when 'b' { $br = True; self.get-new-bet;   }
+	when 'o' { $br = True; self.game-options;  }
+        when 'q' { $br = True; self.clear;         }
         default {
           $br = True;
           self.clear;
@@ -303,6 +299,93 @@ class Game is export {
 
       last if $br
     }
+  }
+
+  method game-options {
+    self.clear;
+    self.draw-hands;
+
+    say ' (N) Number of Decks  (T) Deck Type  (B) Back';
+
+    my Bool $br = False;
+    my Str $c;
+
+    loop {
+      $c = self.read-one-char;
+
+      given $c {
+        when 'n' { $br = True; self.get-new-num-decks; }
+        when 't' { $br = True; self.get-new-deck-type; }
+	when 'b' {
+	  $br = True;
+	  self.clear;
+          self.draw-hands;
+          self.draw-player-bet-options;
+        }
+        default {
+          $br = True;
+          self.clear;
+          self.draw-hands;
+          self.game-options;
+        }
+      }
+
+      last if $br
+    }
+  }
+
+  method get-new-deck-type {
+    self.clear;
+    self.draw-hands;
+
+    say ' (1) Regular  (2) Aces  (3) Jacks  (4) Aces & Jacks  (5) Sevens  (6) Eights';
+
+    my Bool $br = False;
+    my Str $c;
+
+    loop {
+      $c = self.read-one-char;
+
+      given $c {
+        when '1' { $br = True; self.shoe.new-regular;    }
+        when '2' { $br = True; self.shoe.new-aces;       }
+        when '3' { $br = True; self.shoe.new-jacks;      }
+        when '4' { $br = True; self.shoe.new-aces-jacks; }
+        when '5' { $br = True; self.shoe.new-sevens;     }
+        when '6' { $br = True; self.shoe.new-eights;     }
+        default {
+          $br = True;
+          self.clear;
+          self.draw-hands;
+          self.get-new-deck-type;
+        }
+      }
+
+      if $br {
+	self.clear;
+	self.draw-hands;
+	self.draw-player-bet-options;
+	last;
+      }
+    }
+  }
+
+  method get-new-num-decks {
+    self.clear;
+    self.draw-hands;
+
+    my Str $opts = '  Number Of Decks: ';
+    $opts ~= $!num-decks;
+    $opts ~= "\n";
+    $opts ~= '  Enter New Number Of Decks: ';
+
+    my Int $tmp = prompt $opts;
+
+    $tmp = 1 if $tmp < 1;
+    $tmp = 8 if $tmp > 8;
+
+    $!num-decks = $tmp;
+    self.game-options;
   }
 
   method get-new-bet {
