@@ -33,14 +33,10 @@ class PlayerHand is Hand is export {
       $c = $!game.read-one-char;
 
       given $c {
-        when 'h' { if self.can-hit()   { $br = True;
-        self.hit; } }
-        when 's' { if self.can-stand() { $br = True;
-        self.stand; } }
-        when 'p' { if self.can-split() { $br = True;
-        $!game.split-current-hand; } }
-        when 'd' { if self.can-dbl()   { $br = True;
-        self.dbl; } }
+        when 'h' { if self.can-hit()   { $br = True; self.hit;                  } }
+        when 's' { if self.can-stand() { $br = True; self.stand;                } }
+        when 'p' { if self.can-split() { $br = True; $!game.split-current-hand; } }
+        when 'd' { if self.can-dbl()   { $br = True; self.dbl;                  } }
         default {
           $br = True;
           $!game.clear;

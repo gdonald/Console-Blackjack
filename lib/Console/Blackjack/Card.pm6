@@ -28,7 +28,7 @@ class Card is export {
   }
 
   method is-ten(--> Bool) {
-    $!value > 9;
+    $!value > 8;
   }
 
   method draw(--> Str) {

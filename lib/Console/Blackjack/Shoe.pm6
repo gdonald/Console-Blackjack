@@ -10,6 +10,7 @@ class Shoe is export {
 
   submethod BUILD(:$!num-decks) {
     @!shuffle-specs = (80 => 1), (81 => 2), (82 => 3), (84 => 4), (86 => 5), (89 => 6), (92 => 7), (95 => 8);
+    self.new-regular;
     self.shuffle;
   }
 
@@ -34,37 +35,37 @@ class Shoe is export {
   }
 
   method shuffle {
-    # self.new-sevens;
-    # self.new-eights;
-    # self.new-aces;
-    # self.new-jacks;
-    # self.new-aces-jacks;
-    self.new-regular;
     for 0..6 { @!cards = @!cards.pick: *; }
   }
 
   method new-aces-jacks {
     self.new-irregular([0, 10]);
+    self.shuffle;
   }
 
   method new-jacks {
     self.new-irregular([10]);
+    self.shuffle;
   }
 
   method new-aces {
     self.new-irregular([0]);
+    self.shuffle;
   }
 
   method new-eights {
     self.new-irregular([7]);
+    self.shuffle;
   }
 
   method new-sevens {
     self.new-irregular([6]);
+    self.shuffle;
   }
 
   method new-regular {
     self.new-irregular([0..12]);
+    self.shuffle;
   }
 
   method new-irregular(@values) {
