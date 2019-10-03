@@ -1,17 +1,10 @@
 ## Console-Blackjack
 
-Console Blackjack written in Perl6
+Console Blackjack written in Rakudo Perl 6
 
-### Get Perl6
-
-#### [https://perl6.org/](https://perl6.org/)
-
-Console Blackjack does not work with Perl5 ☹
-
-### Install Blackjack with zef:
+### Install using zef:
 
 ```
-$ zef update
 $ zef install Console::Blackjack
 ```
 
@@ -21,23 +14,13 @@ $ zef install Console::Blackjack
 $ console-blackjack
 ```
 
-#### or
-
-```
-$ perl6
-
-perl6> use Console::Blackjack
-perl6> Console::Blackjack::Game.new
-```
-
-&nbsp;
 #### Increase your terminal font size for a better view:
 
-![Blackjack](https://raw.githubusercontent.com/gdonald/Console-Blackjack/master/bj.png)
+![Blackjack](https://raw.githubusercontent.com/rakuist/Console-Blackjack/master/bj.png)
 
 ### Report Bugs
 
-#### If you find any bugs or have other issues please [report them here](https://github.com/gdonald/Console-Blackjack/issues).
+#### If you find any bugs or have other issues please [report them here](https://github.com/rakuist/Console-Blackjack/issues).
 
 ### License
 
