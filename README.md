@@ -1,6 +1,6 @@
 ## Console-Blackjack
 
-Console Blackjack written in Rakudo Perl 6
+Console Blackjack written in Raku
 
 ### Install using zef:
 
@@ -16,11 +16,11 @@ $ console-blackjack
 
 #### Increase your terminal font size for a better view:
 
-![Blackjack](https://raw.githubusercontent.com/rakuist/Console-Blackjack/master/bj.png)
+![Blackjack](https://raw.githubusercontent.com/gdonald/Console-Blackjack/master/bj.png)
 
 ### Report Bugs
 
-#### If you find any bugs or have other issues please [report them here](https://github.com/rakuist/Console-Blackjack/issues).
+#### If you find any bugs or have other issues please [report them here](https://github.com/gdonald/Console-Blackjack/issues).
 
 ### License
 
