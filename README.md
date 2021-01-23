@@ -4,19 +4,27 @@ Console Blackjack written in Raku
 
 ### Install using zef:
 
-```
-$ zef install Console::Blackjack
+```shell
+zef install Console::Blackjack
 ```
 
 ### Run
 
-```
-$ console-blackjack
+```shell
+console-blackjack
 ```
 
 #### Increase your terminal font size for a better view:
 
 ![Blackjack](https://raw.githubusercontent.com/gdonald/Console-Blackjack/master/bj.png)
+
+### From source
+
+If you've cloned the git repository you can run it like this:
+
+```shell
+raku -Ilib bin/console-blackjack
+```
 
 ### Report Bugs
 
