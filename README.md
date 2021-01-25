@@ -25,6 +25,9 @@ If you've cloned the git repository you can run it like this:
 ```shell
 raku -Ilib bin/console-blackjack
 ```
+### Status
+
+[![.github/workflows/raku.yml](https://github.com/gdonald/Console-Blackjack/workflows/.github/workflows/raku.yml/badge.svg)](https://github.com/gdonald/Console-Blackjack/actions)
 
 ### Report Bugs
 
