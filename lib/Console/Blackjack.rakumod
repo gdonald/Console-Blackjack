@@ -13,30 +13,36 @@ class Game is export {
   has Rat $!min-bet;
   has Rat $!max-bet;
   has IO::Handle $!tty;
-  has Int $!num-decks;
   has Shoe $.shoe;
   has DealerHand $!dealer-hand;
   has PlayerHand @.player-hands;
   has Int $.current-player-hand;
   has Rat $!current-bet;
   has Rat $.money is rw;
+  has Bool $!quitting;
 
   submethod BUILD {
-    $!save-file = 'blackjack.txt';
+    $!quitting = False;
+    $!save-file = 'bj.txt';
     $!min-bet = 5.0;
     $!max-bet = 1000000.0;
     $!current-bet = 5.0;
     $!starting-money = 100.0;
     $!money = $!starting-money;
-    $!num-decks = 8;
+    Shoe.num-decks = 8;
+    Shoe.deck-type = 1;
+    Card.face-type = 1;
 
     self.load-game;
-    $!shoe = Shoe.new(:$!num-decks);
+
     $!dealer-hand = DealerHand.new(game => self);
     $!current-player-hand = 0;
     @!player-hands = [];
+    $!shoe = Shoe.new;
+  }
 
-    self.deal-new-hand;
+  method run {
+    while !$!quitting { self.deal-new-hand; }
   }
 
   method read-one-char(--> Str) {
@@ -99,16 +105,16 @@ class Game is export {
 
   method play-more-hands {
     ++$!current-player-hand;
-    my $h = @!player-hands[$!current-player-hand];
+    my PlayerHand $player-hand = @!player-hands[$!current-player-hand];
 
-    $h.deal-card;
-    if $h.is-done {
-      $h.process;
+    $player-hand.deal-card;
+    if $player-hand.is-done {
+      $player-hand.process;
       return;
     }
 
     self.draw-hands;
-    $h.get-action;
+    $player-hand.get-action;
   }
 
   method play-dealer-hand {
@@ -136,8 +142,7 @@ class Game is export {
   }
 
   method deal-new-hand {
-    $!shoe.shuffle if $!shoe.need-to-shuffle;
-
+    $!shoe = Shoe.new if $!shoe.need-to-shuffle;
     @!player-hands = [];
     PlayerHand.total-player-hands = 0;
 
@@ -285,10 +290,10 @@ class Game is export {
       $c = self.read-one-char;
 
       given $c {
-        when 'd' { $br = True; self.deal-new-hand; }
-        when 'b' { $br = True; self.get-new-bet;   }
-	when 'o' { $br = True; self.game-options;  }
-        when 'q' { $br = True; self.clear;         }
+        when 'd' { $br = True; }
+        when 'b' { $br = True; self.get-new-bet; }
+        when 'o' { $br = True; self.game-options; }
+        when 'q' { $br = True; self.clear; $!quitting = True; }
         default {
           $br = True;
           self.clear;
@@ -305,7 +310,7 @@ class Game is export {
     self.clear;
     self.draw-hands;
 
-    say ' (N) Number of Decks  (T) Deck Type  (B) Back';
+    say ' (N) Number of Decks  (T) Deck Type  (F) Face Type  (B) Back';
 
     my Bool $br = False;
     my Str $c;
@@ -316,9 +321,10 @@ class Game is export {
       given $c {
         when 'n' { $br = True; self.get-new-num-decks; }
         when 't' { $br = True; self.get-new-deck-type; }
-	when 'b' {
-	  $br = True;
-	  self.clear;
+        when 'f' { $br = True; self.get-new-face-type; }
+        when 'b' {
+          $br = True;
+          self.clear;
           self.draw-hands;
           self.draw-player-bet-options;
         }
@@ -331,6 +337,39 @@ class Game is export {
       }
 
       last if $br
+    }
+  }
+
+  method get-new-face-type {
+    self.clear;
+    self.draw-hands;
+
+    say ' (1) A♠  (2) 🂡';
+
+    my Bool $br = False;
+    my Str $c;
+
+    loop {
+      $c = self.read-one-char;
+
+      given $c {
+        when 1..2 { $br = True; }
+        default {
+          $br = True;
+          self.clear;
+          self.draw-hands;
+          self.get-new-face-type;
+        }
+      }
+
+      if $br {
+        Card.face-type = $c;
+        self.save-game;
+        self.clear;
+        self.draw-hands;
+        self.draw-player-bet-options;
+        last;
+      }
     }
   }
 
@@ -347,12 +386,7 @@ class Game is export {
       $c = self.read-one-char;
 
       given $c {
-        when '1' { $br = True; self.shoe.new-regular;    }
-        when '2' { $br = True; self.shoe.new-aces;       }
-        when '3' { $br = True; self.shoe.new-jacks;      }
-        when '4' { $br = True; self.shoe.new-aces-jacks; }
-        when '5' { $br = True; self.shoe.new-sevens;     }
-        when '6' { $br = True; self.shoe.new-eights;     }
+        when 1..6 { $br = True; }
         default {
           $br = True;
           self.clear;
@@ -362,10 +396,14 @@ class Game is export {
       }
 
       if $br {
-	self.clear;
-	self.draw-hands;
-	self.draw-player-bet-options;
-	last;
+        Shoe.num-decks = 8 unless $c == 1;
+        Shoe.deck-type = $c;
+        $!shoe = Shoe.new;
+        self.save-game;
+        self.clear;
+        self.draw-hands;
+        self.draw-player-bet-options;
+        last;
       }
     }
   }
@@ -375,7 +413,7 @@ class Game is export {
     self.draw-hands;
 
     my Str $opts = '  Number Of Decks: ';
-    $opts ~= $!num-decks;
+    $opts ~= Shoe.num-decks;
     $opts ~= "\n";
     $opts ~= '  Enter New Number Of Decks: ';
 
@@ -384,7 +422,9 @@ class Game is export {
     $tmp = 1 if $tmp < 1;
     $tmp = 8 if $tmp > 8;
 
-    $!num-decks = $tmp;
+    Shoe.num-decks = $tmp;
+    $!shoe = Shoe.new;
+    self.save-game;
     self.game-options;
   }
 
@@ -412,7 +452,7 @@ class Game is export {
 
   method save-game {
     if (my $fh = open $!save-file, :w) {
-      $fh.print("$!num-decks|$!money|$!current-bet");
+      $fh.print(Shoe.num-decks | '|' | Shoe.deck-type | '|' | Card.face-type | "|$!money|$!current-bet");
       $fh.close;
     }
   }
@@ -423,12 +463,14 @@ class Game is export {
       $fh.close;
 
       my Str @a = $contents.split('|');
-      $!num-decks   = @a[0].Int;
-      $!money       = @a[1].Rat;
-      $!current-bet = @a[2].Rat;
+      Shoe.num-decks = @a[0].Int;
+      Shoe.deck-type = @a[1].Int;
+      Card.face-type = @a[2].Int;
+      $!money        = @a[3].Rat;
+      $!current-bet  = @a[4].Rat;
     }
 
-    $!money = $!starting-money if $!money < $!min-bet;
+    $!money = $!starting-money if $!money <= $!min-bet;
   }
 
   method clear {

@@ -1,3 +1,4 @@
 .idea
 .precomp
-blackjack.txt
+bj.txt
+.DS_Store

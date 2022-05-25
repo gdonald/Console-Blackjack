@@ -20,10 +20,10 @@ class PlayerHand is Hand is export {
 
   method get-action {
     my Str $opts = " ";
-    $opts ~= "(H) Hit  "    if self.can-hit;
-    $opts ~= "(S) Stand  "  if self.can-stand;
-    $opts ~= "(P) Split  "  if self.can-split;
-    $opts ~= "(D) Double  " if self.can-dbl;
+    $opts ~= '(H) Hit  '    if self.can-hit;
+    $opts ~= '(S) Stand  '  if self.can-stand;
+    $opts ~= '(P) Split  '  if self.can-split;
+    $opts ~= '(D) Double  ' if self.can-dbl;
     say $opts;
 
     my Bool $br = False;
@@ -160,19 +160,11 @@ class PlayerHand is Hand is export {
     print self.get-value(Hand::CountMethod::Soft);
     print '  ';
 
-    if $!status == Hand::Status::Lost {
-      print '-';
-    } else {
-      print '+';
-    }
+    print $!status == Hand::Status::Lost ?? '-' !! '+';
 
     print '$';
     print sprintf('%.2f', $!bet);
-
-    if !$.played && $index == $!game.current-player-hand {
-      print ' ⇐';
-    }
-
+    print ' ⇐' if !$.played && $index == $!game.current-player-hand;
     print '  ';
 
     if $!status == Hand::Status::Lost {

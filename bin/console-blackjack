@@ -3,4 +3,4 @@
 use v6.d;
 use Console::Blackjack;
 
-Console::Blackjack::Game.new;
+Console::Blackjack::Game.new.run;

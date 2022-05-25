@@ -1,7 +1,24 @@
 
+unit class Console::Blackjack::Card;
+
 class Card is export {
-  my Str @.suites = <Spades Hearts Clubs Diamonds>;
   my Array @.faces = [
+    [ 'A♠', 'A♥', 'A♣', 'A♦' ],
+    [ '2♠', '2♥', '2♣', '2♦' ],
+    [ '3♠', '3♥', '3♣', '3♦' ],
+    [ '4♠', '4♥', '4♣', '4♦' ],
+    [ '5♠', '5♥', '5♣', '5♦' ],
+    [ '6♠', '6♥', '6♣', '6♦' ],
+    [ '7♠', '7♥', '7♣', '7♦' ],
+    [ '8♠', '8♥', '8♣', '8♦' ],
+    [ '9♠', '9♥', '9♣', '9♦' ],
+    [ 'T♠', 'T♥', 'T♣', 'T♦' ],
+    [ 'J♠', 'J♥', 'J♣', 'J♦' ],
+    [ 'Q♠', 'Q♥', 'Q♣', 'Q♦' ],
+    [ 'K♠', 'K♥', 'K♣', 'K♦' ],
+    ['??']
+  ];
+  my Array @.faces2 = [
     ['🂡', '🂱', '🃁', '🃑'],
     ['🂢', '🂲', '🃂', '🃒'],
     ['🂣', '🂳', '🃃', '🃓'],
@@ -18,10 +35,10 @@ class Card is export {
     ['🂠', '', '', '']];
 
   has Int $.value;
-  has Int $!suite-value;
-  has Str $!suite;
+  has Int $!suit;
+  my $.face-type;
 
-  submethod BUILD(:$!value, :$!suite, :$!suite-value) {}
+  submethod BUILD(:$!value, :$!suit) {}
 
   method is-ace(--> Bool) {
     $!value == 0;
@@ -32,6 +49,7 @@ class Card is export {
   }
 
   method draw(--> Str) {
-    Card.faces[$!value][$!suite-value];
+    return Card.faces2[$!value][$!suit] if Card.face-type == 2;
+    Card.faces[$!value][$!suit];
   }
 }

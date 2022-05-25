@@ -1,4 +1,6 @@
 
+unit class Console::Blackjack::Hand;
+
 use Console::Blackjack::Shoe;
 use Console::Blackjack::Card;
 

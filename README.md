@@ -2,6 +2,14 @@
 
 Console Blackjack written in Raku
 
+### Features
+
+* Alternate Deck Types
+* Variable Number of Decks
+* Hand Splitting
+* Vegas-style Dealer Play (Dealer hits on soft 16)
+* Options Saving
+
 ### Install using zef:
 
 ```shell
@@ -16,7 +24,9 @@ console-blackjack
 
 #### Increase your terminal font size for a better view:
 
-![Blackjack](https://raw.githubusercontent.com/gdonald/Console-Blackjack/master/bj.png)
+![Blackjack](https://raw.githubusercontent.com/gdonald/Console-Blackjack/master/ss1.png)
+
+![Blackjack](https://raw.githubusercontent.com/gdonald/Console-Blackjack/master/ss2.png)
 
 ### From source
 
@@ -26,9 +36,9 @@ If you've cloned the git repository you can run it like this:
 raku -Ilib bin/console-blackjack
 ```
 
-### Report Bugs
+### Bugs / Issues / Feature Requests 
 
-#### If you find any bugs or have other issues please [report them here](https://github.com/gdonald/Console-Blackjack/issues).
+[https://github.com/gdonald/Console-Blackjack/issues](https://github.com/gdonald/Console-Blackjack/issues)
 
 ### License
 
