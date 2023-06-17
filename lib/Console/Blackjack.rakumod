@@ -222,7 +222,7 @@ class Game is export {
 
     $h.bet /= 2;
     $h.played = True;
-    $h.payed = True;
+    $h.paid = True;
     $h.status = Hand::Status::Lost;
     $!money -= $h.bet;
 
@@ -259,8 +259,8 @@ class Game is export {
     my Bool $dhb = $!dealer-hand.is-busted;
 
     for @!player-hands -> $h {
-      next if $h.payed;
-      $h.payed = True;
+      next if $h.paid;
+      $h.paid = True;
 
       my Int $phv = $h.get-value(Hand::CountMethod::Soft);
 

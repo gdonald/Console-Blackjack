@@ -10,12 +10,12 @@ class PlayerHand is Hand is export {
   has $!game;
   has Rat $.bet is rw;
   has Hand::Status $.status is rw;
-  has Bool $.payed is rw;
+  has Bool $.paid is rw;
 
   submethod BUILD(:$!game, :$!bet) {
     ++PlayerHand.total-player-hands;
     $!status = Hand::Status::Unknown;
-    $!payed = False;
+    $!paid = False;
   }
 
   method get-action {
@@ -108,9 +108,9 @@ class PlayerHand is Hand is export {
     if $.played || $.stood || self.is-blackjack || self.is-busted || 21 == self.get-value(Hand::CountMethod::Soft) || 21 == self.get-value(Hand::CountMethod::Hard) {
       $.played = True;
 
-      if !$!payed {
+      if !$!paid {
         if self.is-busted {
-          $!payed = True;
+          $!paid = True;
           $!status = Hand::Status::Lost;
           $!game.money -= $!bet;
         }
