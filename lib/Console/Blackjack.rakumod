@@ -397,7 +397,7 @@ class Game is export {
 
       if $br {
         Shoe.num-decks = 8 unless $c == 1;
-        Shoe.deck-type = $c;
+        Shoe.deck-type = $c.Int;
         $!shoe = Shoe.new;
         self.save-game;
         self.clear;
