@@ -1,0 +1,25 @@
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Raku/setup-raku@v1
+        with:
+          raku-version: 'latest'
+      - name: Raku version
+        run: raku --version
+      - name: Cache zef
+        uses: actions/cache@v4
+        with:
+          path: ~/.zef
+          key: zef-ubuntu-latest-${{ hashFiles('META6.json') }}
+          restore-keys: |
+            zef-ubuntu-latest-
+      - name: Install dependencies
+        run: zef install --deps-only --/test --test-depends .
+      - name: Install prove6
+        run: zef install --/test App::Prove6
+      - name: Run tests
+        run: ./test.raku
