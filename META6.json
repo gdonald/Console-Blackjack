@@ -1,12 +1,11 @@
 {
   "name": "Console::Blackjack",
   "description": "Console Blackjack for Raku",
-  "version": "1.0.8",
+  "version": "1.0.9",
+  "api": "1",
   "perl": "6.d",
-  "authors": [
-    "Greg Donald"
-  ],
-  "auth": "github:gdonald",
+  "authors": ["Greg Donald"],
+  "auth": "zef:gdonald",
   "depends": [],
   "build-depends": [],
   "test-depends": [],
@@ -18,12 +17,12 @@
     "Console::Blackjack::PlayerHand": "lib/Console/Blackjack/PlayerHand.rakumod",
     "Console::Blackjack::Shoe": "lib/Console/Blackjack/Shoe.rakumod"
   },
+  "support": {
+    "source": "https://github.com/gdonald/Console-Blackjack.git",
+    "bugtracker": "https://github.com/gdonald/Console-Blackjack/issues"
+  },
   "resources": [],
   "license": "Artistic-2.0",
-  "tags": [
-    "Console",
-    "Blackjack",
-    "Game"
-  ],
+  "tags": ["Console", "Blackjack", "Game"],
   "source-url": "git://github.com/gdonald/Console-Blackjack.git"
 }
