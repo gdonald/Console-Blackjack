@@ -8,7 +8,7 @@
   "auth": "zef:gdonald",
   "depends": [],
   "build-depends": [],
-  "test-depends": ["JSON::Fast"],
+  "test-depends": ["JSON::Fast", "Test::META"],
   "provides": {
     "Console::Blackjack": "lib/Console/Blackjack.rakumod",
     "Console::Blackjack::Card": "lib/Console/Blackjack/Card.rakumod",
