@@ -1,0 +1,401 @@
+#!/usr/bin/env raku
+
+use v6;
+use lib 'lib';
+use Test;
+use Console::Blackjack;
+use Console::Blackjack::Hand;
+use Console::Blackjack::PlayerHand;
+use Console::Blackjack::Card;
+
+plan 61;
+
+my $orig-cwd = $*CWD;
+my $tmpdir = ($*TMPDIR ~ '/console-blackjack-player-' ~ $*PID).IO;
+$tmpdir.mkdir;
+chdir $tmpdir;
+
+LEAVE {
+  chdir $orig-cwd;
+  for $tmpdir.dir -> $f { $f.unlink if $f.f; }
+  $tmpdir.rmdir;
+}
+
+sub fresh-game(Rat :$money = 100.0) {
+  PlayerHand.total-player-hands = 0;
+  my $g = Game.new;
+  $g.money = $money;
+  $g;
+}
+
+# construction
+my $game = fresh-game();
+my $ph = PlayerHand.new(game => $game, bet => 5.0);
+isa-ok $ph, PlayerHand, 'PlayerHand.new returns a PlayerHand';
+isa-ok $ph, Hand, 'PlayerHand is a Hand';
+is $ph.bet, 5.0, 'bet is initialized';
+is $ph.status, Hand::Status::Unknown, 'status defaults to Unknown';
+nok $ph.paid, 'paid defaults to False';
+
+# BUILD increments total-player-hands
+PlayerHand.total-player-hands = 0;
+PlayerHand.new(game => $game, bet => 5.0);
+PlayerHand.new(game => $game, bet => 5.0);
+is PlayerHand.total-player-hands, 2, 'total-player-hands counts each new hand';
+
+# class accessors
+is PlayerHand.max-player-hands, 7, 'max-player-hands is 7';
+
+# get-value: simple sum
+PlayerHand.total-player-hands = 0;
+my $h = PlayerHand.new(game => $game, bet => 5.0);
+$h.cards = [Card.new(value => 4, suit => 0), Card.new(value => 7, suit => 0)];
+is $h.get-value(Hand::CountMethod::Soft), 13, '5 + 8 = 13';
+
+# get-value: Ace soft
+$h.cards = [Card.new(value => 0, suit => 0), Card.new(value => 5, suit => 0)];
+is $h.get-value(Hand::CountMethod::Soft), 17, 'Ace + 6 soft = 17';
+is $h.get-value(Hand::CountMethod::Hard), 7,  'Ace + 6 hard = 7';
+
+# get-value: soft falls back to hard when over 21
+$h.cards = [
+  Card.new(value => 0, suit => 0),
+  Card.new(value => 5, suit => 0),
+  Card.new(value => 8, suit => 0),
+];
+is $h.get-value(Hand::CountMethod::Soft), 16, 'Ace+6+9 soft falls back to hard';
+
+# get-value: face cards = 10
+$h.cards = [Card.new(value => 10, suit => 0), Card.new(value => 11, suit => 0)];
+is $h.get-value(Hand::CountMethod::Soft), 20, 'Jack + Queen = 20';
+
+# is-busted
+$h.cards = [
+  Card.new(value => 9, suit => 0),
+  Card.new(value => 9, suit => 0),
+  Card.new(value => 9, suit => 0),
+];
+ok $h.is-busted, 'three tens is busted';
+
+# is-blackjack
+$h.cards = [Card.new(value => 0, suit => 0), Card.new(value => 12, suit => 0)];
+ok $h.is-blackjack, 'Ace + King is blackjack';
+
+# can-hit: True for normal two-card non-21 non-bj
+my $hit-hand = PlayerHand.new(game => $game, bet => 5.0);
+$hit-hand.cards = [Card.new(value => 4, suit => 0), Card.new(value => 5, suit => 0)];
+ok $hit-hand.can-hit, 'can-hit on a 5+6';
+
+# can-hit: False when played
+$hit-hand.played = True;
+nok $hit-hand.can-hit, 'cannot hit when played';
+$hit-hand.played = False;
+
+# can-hit: False when stood
+$hit-hand.stood = True;
+nok $hit-hand.can-hit, 'cannot hit when stood';
+$hit-hand.stood = False;
+
+# can-hit: False on blackjack
+$hit-hand.cards = [Card.new(value => 0, suit => 0), Card.new(value => 12, suit => 0)];
+nok $hit-hand.can-hit, 'cannot hit on blackjack';
+
+# can-hit: False on busted
+$hit-hand.cards = [
+  Card.new(value => 9, suit => 0),
+  Card.new(value => 9, suit => 0),
+  Card.new(value => 9, suit => 0),
+];
+nok $hit-hand.can-hit, 'cannot hit on busted';
+
+# can-hit: False on 21 hard
+$hit-hand.cards = [
+  Card.new(value => 6, suit => 0),
+  Card.new(value => 6, suit => 0),
+  Card.new(value => 8, suit => 0),
+];
+nok $hit-hand.can-hit, 'cannot hit on hard 21';
+
+# can-stand: True for active hand
+my $stand-hand = PlayerHand.new(game => $game, bet => 5.0);
+$stand-hand.cards = [Card.new(value => 4, suit => 0), Card.new(value => 5, suit => 0)];
+ok $stand-hand.can-stand, 'can-stand on a 5+6';
+
+# can-stand: False when stood
+$stand-hand.stood = True;
+nok $stand-hand.can-stand, 'cannot stand when already stood';
+$stand-hand.stood = False;
+
+# can-stand: False on blackjack
+$stand-hand.cards = [Card.new(value => 0, suit => 0), Card.new(value => 12, suit => 0)];
+nok $stand-hand.can-stand, 'cannot stand on blackjack';
+
+# can-stand: False on busted
+$stand-hand.cards = [
+  Card.new(value => 9, suit => 0),
+  Card.new(value => 9, suit => 0),
+  Card.new(value => 9, suit => 0),
+];
+nok $stand-hand.can-stand, 'cannot stand on busted';
+
+# can-split: True for matching values, enough money, under max
+my $split-game = fresh-game(money => 100.0);
+my $split-hand = PlayerHand.new(game => $split-game, bet => 5.0);
+$split-game.player-hands.push($split-hand);
+$split-hand.cards = [Card.new(value => 7, suit => 0), Card.new(value => 7, suit => 1)];
+ok $split-hand.can-split, 'can-split on a pair of 8s with money';
+
+# can-split: False when stood
+$split-hand.stood = True;
+nok $split-hand.can-split, 'cannot split when stood';
+$split-hand.stood = False;
+
+# can-split: False when cards don't match
+$split-hand.cards = [Card.new(value => 7, suit => 0), Card.new(value => 8, suit => 1)];
+nok $split-hand.can-split, 'cannot split when cards differ';
+
+# can-split: False with only one card
+$split-hand.cards = [Card.new(value => 7, suit => 0)];
+nok $split-hand.can-split, 'cannot split a one-card hand';
+
+# can-split: False when not enough money
+my $poor-game = fresh-game(money => 5.0);
+my $poor-hand = PlayerHand.new(game => $poor-game, bet => 5.0);
+$poor-game.player-hands.push($poor-hand);
+$poor-hand.cards = [Card.new(value => 7, suit => 0), Card.new(value => 7, suit => 1)];
+nok $poor-hand.can-split, 'cannot split without enough money';
+
+# can-split: False at max hands
+PlayerHand.total-player-hands = 7;
+my $maxed = PlayerHand.new(game => $split-game, bet => 5.0);
+$maxed.cards = [Card.new(value => 7, suit => 0), Card.new(value => 7, suit => 1)];
+nok $maxed.can-split, 'cannot split when at max-player-hands';
+PlayerHand.total-player-hands = 0;
+
+# can-dbl: True with funds and 2 cards
+my $dbl-game = fresh-game(money => 100.0);
+my $dbl-hand = PlayerHand.new(game => $dbl-game, bet => 5.0);
+$dbl-game.player-hands.push($dbl-hand);
+$dbl-hand.cards = [Card.new(value => 4, suit => 0), Card.new(value => 5, suit => 0)];
+ok $dbl-hand.can-dbl, 'can-dbl with 2 cards and money';
+
+# can-dbl: False with no funds
+my $broke-game = fresh-game(money => 5.0);
+my $broke-hand = PlayerHand.new(game => $broke-game, bet => 5.0);
+$broke-game.player-hands.push($broke-hand);
+$broke-hand.cards = [Card.new(value => 4, suit => 0), Card.new(value => 5, suit => 0)];
+nok $broke-hand.can-dbl, 'cannot double without enough money';
+
+# can-dbl: False with 3 cards
+$dbl-hand.cards = [
+  Card.new(value => 1, suit => 0),
+  Card.new(value => 2, suit => 0),
+  Card.new(value => 3, suit => 0),
+];
+nok $dbl-hand.can-dbl, 'cannot double with 3 cards';
+
+# can-dbl: False when stood
+$dbl-hand.cards = [Card.new(value => 4, suit => 0), Card.new(value => 5, suit => 0)];
+$dbl-hand.stood = True;
+nok $dbl-hand.can-dbl, 'cannot double when stood';
+$dbl-hand.stood = False;
+
+# can-dbl: False on blackjack
+$dbl-hand.cards = [Card.new(value => 0, suit => 0), Card.new(value => 12, suit => 0)];
+nok $dbl-hand.can-dbl, 'cannot double on blackjack';
+
+# is-done: True for blackjack
+my $done-game = fresh-game(money => 100.0);
+my $done-hand = PlayerHand.new(game => $done-game, bet => 5.0);
+$done-hand.cards = [Card.new(value => 0, suit => 0), Card.new(value => 12, suit => 0)];
+ok $done-hand.is-done, 'blackjack is done';
+
+# is-done: True for bust, marks paid and deducts money
+my $bust-game = fresh-game(money => 100.0);
+my $bust-hand = PlayerHand.new(game => $bust-game, bet => 10.0);
+$bust-hand.cards = [
+  Card.new(value => 9, suit => 0),
+  Card.new(value => 9, suit => 1),
+  Card.new(value => 9, suit => 2),
+];
+ok $bust-hand.is-done, 'busted hand is done';
+ok $bust-hand.paid, 'busted hand is marked paid';
+is $bust-hand.status, Hand::Status::Lost, 'busted hand status is Lost';
+is $bust-game.money, 90.0, 'busted hand deducts bet from money';
+
+# is-done: False for active two-card mid-value hand
+my $active-game = fresh-game(money => 100.0);
+my $active-hand = PlayerHand.new(game => $active-game, bet => 5.0);
+$active-hand.cards = [Card.new(value => 4, suit => 0), Card.new(value => 5, suit => 0)];
+nok $active-hand.is-done, 'fresh 5+6 is not done';
+
+# draw: outputs cards and status
+my $draw-game = fresh-game(money => 100.0);
+my $draw-hand = PlayerHand.new(game => $draw-game, bet => 10.0);
+$draw-game.player-hands.push($draw-hand);
+$draw-hand.cards = [Card.new(value => 0, suit => 0), Card.new(value => 12, suit => 0)];
+$draw-hand.status = Hand::Status::Won;
+$draw-hand.played = True;
+
+my $captured = '';
+{
+  my $*OUT = class {
+    method print(*@a) { $captured ~= @a.join; }
+    method say(*@a)   { $captured ~= @a.join ~ "\n"; }
+    method flush {}
+  }.new;
+  $draw-hand.draw(0);
+}
+ok $captured.contains('A♠'),       'draw outputs the first card';
+ok $captured.contains('Blackjack!'), 'draw outputs Blackjack! for Won + blackjack';
+
+# draw: Lost / Busted
+$draw-hand.cards = [
+  Card.new(value => 9, suit => 0),
+  Card.new(value => 9, suit => 1),
+  Card.new(value => 9, suit => 2),
+];
+$draw-hand.status = Hand::Status::Lost;
+$captured = '';
+{
+  my $*OUT = class {
+    method print(*@a) { $captured ~= @a.join; }
+    method say(*@a)   { $captured ~= @a.join ~ "\n"; }
+    method flush {}
+  }.new;
+  $draw-hand.draw(0);
+}
+ok $captured.contains('Busted!'), 'draw outputs Busted! for Lost + busted';
+
+# draw: Push
+$draw-hand.cards = [Card.new(value => 9, suit => 0), Card.new(value => 9, suit => 1)];
+$draw-hand.status = Hand::Status::Push;
+$captured = '';
+{
+  my $*OUT = class {
+    method print(*@a) { $captured ~= @a.join; }
+    method say(*@a)   { $captured ~= @a.join ~ "\n"; }
+    method flush {}
+  }.new;
+  $draw-hand.draw(0);
+}
+ok $captured.contains('Push'), 'draw outputs Push for Status::Push';
+
+# draw: Won + non-blackjack outputs "Won!"
+my $won-game = fresh-game(money => 100.0);
+my $won-hand = PlayerHand.new(game => $won-game, bet => 5.0);
+$won-game.player-hands.push($won-hand);
+$won-hand.cards = [Card.new(value => 9, suit => 0), Card.new(value => 9, suit => 1)];
+$won-hand.status = Hand::Status::Won;
+$won-hand.played = True;
+$captured = '';
+{
+  my $*OUT = class {
+    method print(*@a) { $captured ~= @a.join; }
+    method say(*@a)   { $captured ~= @a.join ~ "\n"; }
+    method flush {}
+  }.new;
+  $won-hand.draw(0);
+}
+ok $captured.contains('Won!'), 'draw outputs Won! for Won non-blackjack';
+nok $captured.contains('Blackjack!'), 'draw does not output Blackjack! for non-bj Won';
+
+# draw: Lost + non-busted outputs "Lose!"
+my $lose-game = fresh-game(money => 100.0);
+my $lose-hand = PlayerHand.new(game => $lose-game, bet => 5.0);
+$lose-game.player-hands.push($lose-hand);
+$lose-hand.cards = [Card.new(value => 7, suit => 0), Card.new(value => 8, suit => 1)];
+$lose-hand.status = Hand::Status::Lost;
+$lose-hand.played = True;
+$captured = '';
+{
+  my $*OUT = class {
+    method print(*@a) { $captured ~= @a.join; }
+    method say(*@a)   { $captured ~= @a.join ~ "\n"; }
+    method flush {}
+  }.new;
+  $lose-hand.draw(0);
+}
+ok $captured.contains('Lose!'), 'draw outputs Lose! for Lost non-busted';
+nok $captured.contains('Busted!'), 'draw does not output Busted! for non-busted Lost';
+
+# draw: Status::Unknown emits no status word
+my $unk-game = fresh-game(money => 100.0);
+my $unk-hand = PlayerHand.new(game => $unk-game, bet => 5.0);
+$unk-game.player-hands.push($unk-hand);
+$unk-hand.cards = [Card.new(value => 4, suit => 0), Card.new(value => 5, suit => 0)];
+$unk-hand.played = True;
+$captured = '';
+{
+  my $*OUT = class {
+    method print(*@a) { $captured ~= @a.join; }
+    method say(*@a)   { $captured ~= @a.join ~ "\n"; }
+    method flush {}
+  }.new;
+  $unk-hand.draw(0);
+}
+nok $captured.contains('Won!'),       'Unknown status emits no Won!';
+nok $captured.contains('Lose!'),      'Unknown status emits no Lose!';
+nok $captured.contains('Push'),       'Unknown status emits no Push';
+nok $captured.contains('Blackjack!'), 'Unknown status emits no Blackjack!';
+
+# draw: current-hand indicator " ⇐" appears when !played and index == current-player-hand
+my $arrow-game = fresh-game(money => 100.0);
+my $arrow-hand = PlayerHand.new(game => $arrow-game, bet => 5.0);
+$arrow-game.player-hands.push($arrow-hand);
+$arrow-hand.cards = [Card.new(value => 4, suit => 0), Card.new(value => 5, suit => 0)];
+$captured = '';
+{
+  my $*OUT = class {
+    method print(*@a) { $captured ~= @a.join; }
+    method say(*@a)   { $captured ~= @a.join ~ "\n"; }
+    method flush {}
+  }.new;
+  $arrow-hand.draw(0);
+}
+ok $captured.contains('⇐'), 'draw renders ⇐ on the active hand';
+
+# is-done: $.played alone returns True without paying out
+my $played-game = fresh-game(money => 100.0);
+my $played-hand = PlayerHand.new(game => $played-game, bet => 5.0);
+$played-hand.cards = [Card.new(value => 4, suit => 0), Card.new(value => 5, suit => 0)];
+$played-hand.played = True;
+ok $played-hand.is-done, 'is-done returns True when played';
+is $played-game.money, 100.0, 'is-done does not change money when only played';
+
+# is-done: $.stood alone returns True
+my $stood-game = fresh-game(money => 100.0);
+my $stood-hand = PlayerHand.new(game => $stood-game, bet => 5.0);
+$stood-hand.cards = [Card.new(value => 4, suit => 0), Card.new(value => 5, suit => 0)];
+$stood-hand.stood = True;
+ok $stood-hand.is-done, 'is-done returns True when stood';
+
+# is-done: soft == 21 (three-card 21, not blackjack)
+my $soft-twenty-one-game = fresh-game(money => 100.0);
+my $soft-twenty-one-hand = PlayerHand.new(game => $soft-twenty-one-game, bet => 5.0);
+$soft-twenty-one-hand.cards = [
+  Card.new(value => 6, suit => 0),
+  Card.new(value => 6, suit => 0),
+  Card.new(value => 7, suit => 0),
+];
+ok $soft-twenty-one-hand.is-done, 'is-done returns True for a 3-card 21';
+
+# is-done: idempotent on an already-paid hand (skips inner paid block)
+my $paid-game = fresh-game(money => 100.0);
+my $paid-hand = PlayerHand.new(game => $paid-game, bet => 7.0);
+$paid-hand.cards = [
+  Card.new(value => 9, suit => 0),
+  Card.new(value => 9, suit => 1),
+  Card.new(value => 9, suit => 2),
+];
+$paid-hand.played = True;
+$paid-hand.paid   = True;
+$paid-hand.status = Hand::Status::Won;
+my $paid-start    = $paid-game.money;
+ok $paid-hand.is-done,         'is-done returns True on an already-paid hand';
+is $paid-hand.status, Hand::Status::Won,
+   'is-done does not overwrite status on an already-paid hand';
+is $paid-game.money, $paid-start,
+   'is-done does not change money on an already-paid hand';
+
+done-testing;

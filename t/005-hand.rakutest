@@ -1,0 +1,90 @@
+#!/usr/bin/env raku
+
+use v6;
+use lib 'lib';
+use Test;
+use Console::Blackjack;
+use Console::Blackjack::Hand;
+use Console::Blackjack::Card;
+use Console::Blackjack::PlayerHand;
+
+plan 16;
+
+my $orig-cwd = $*CWD;
+my $tmpdir = ($*TMPDIR ~ '/console-blackjack-hand-' ~ $*PID).IO;
+$tmpdir.mkdir;
+chdir $tmpdir;
+
+LEAVE {
+  chdir $orig-cwd;
+  for $tmpdir.dir -> $f { $f.unlink if $f.f; }
+  $tmpdir.rmdir;
+}
+
+PlayerHand.total-player-hands = 0;
+my $game = Game.new;
+
+# construction
+my $hand = Hand.new(game => $game);
+isa-ok $hand, Hand, 'Hand.new returns a Hand';
+
+# base get-value returns 0 for either counting method
+is $hand.get-value(Hand::CountMethod::Soft), 0, 'base get-value returns 0 for Soft';
+is $hand.get-value(Hand::CountMethod::Hard), 0, 'base get-value returns 0 for Hard';
+
+# base is-done returns False
+nok $hand.is-done, 'base is-done returns False';
+
+# is-busted depends on get-value > 21, so base hand is never busted
+nok $hand.is-busted, 'base is-busted returns False because get-value is 0';
+
+# is-blackjack: exactly 2 cards, one ace + one ten-value
+my $bj-hand = Hand.new(game => $game);
+$bj-hand.cards = [Card.new(value => 0, suit => 0), Card.new(value => 12, suit => 0)];
+ok $bj-hand.is-blackjack, 'Ace + King is blackjack';
+
+my $bj-hand2 = Hand.new(game => $game);
+$bj-hand2.cards = [Card.new(value => 9, suit => 0), Card.new(value => 0, suit => 1)];
+ok $bj-hand2.is-blackjack, 'Ten + Ace is blackjack (order reversed)';
+
+my $not-bj = Hand.new(game => $game);
+$not-bj.cards = [Card.new(value => 9, suit => 0), Card.new(value => 9, suit => 1)];
+nok $not-bj.is-blackjack, 'Ten + Ten is not blackjack';
+
+my $three-card = Hand.new(game => $game);
+$three-card.cards = [
+  Card.new(value => 0, suit => 0),
+  Card.new(value => 5, suit => 0),
+  Card.new(value => 4, suit => 0),
+];
+nok $three-card.is-blackjack, 'three cards totaling 21 is not blackjack';
+
+my $empty = Hand.new(game => $game);
+$empty.cards = [];
+nok $empty.is-blackjack, 'empty hand is not blackjack';
+
+my $one-card = Hand.new(game => $game);
+$one-card.cards = [Card.new(value => 0, suit => 0)];
+nok $one-card.is-blackjack, 'one-card hand is not blackjack';
+
+# deal-card pulls from the shoe
+my $deal-hand = Hand.new(game => $game);
+$deal-hand.cards = [];
+$deal-hand.deal-card;
+is $deal-hand.cards.elems, 1, 'deal-card adds a card to the hand';
+isa-ok $deal-hand.cards[0], Card, 'deal-card produces a Card';
+
+# multiple deal-card calls keep adding
+$deal-hand.deal-card;
+$deal-hand.deal-card;
+is $deal-hand.cards.elems, 3, 'deal-card can be called repeatedly';
+
+# stood / played flags are rw
+my $flag-hand = Hand.new(game => $game);
+$flag-hand.stood = True;
+ok $flag-hand.stood, 'stood is settable';
+
+$flag-hand.played = True;
+ok $flag-hand.played, 'played is settable';
+
+done-testing;

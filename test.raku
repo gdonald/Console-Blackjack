@@ -8,11 +8,11 @@ $*OUT.out-buffer = False;
 
 chdir $*PROGRAM.parent;
 
-my $jobs = $*KERNEL.cpu-cores // 2;
+my $jobs = max(2, ($*KERNEL.cpu-cores // 2) - 2);
 
 my @stages = (
-  { :name<prove6>, :cmd['prove6', "-j$jobs", '-Ilib', 't']  },
-  # { :name<behave>, :cmd['raku',   '-Ilib',   'bin/behave']  },
+  { :name<prove6>, :cmd['prove6', "-j$jobs", '-Ilib', 't'], :env(%()) },
+  { :name<behave>, :cmd['behave', '--parallel', $jobs.Str], :env(%()) },
 );
 
 my %durations;
@@ -30,16 +30,28 @@ END {
   say '==> Runtimes';
   for @stages -> $s {
     next unless %durations{$s<name>}:exists;
-    printf "  %-9s %7.2fs\n", $s<name>, %durations{$s<name>};
+    printf "  %-7s %7.2fs\n", $s<name>, %durations{$s<name>};
   }
-  printf "  %-9s %7.2fs\n", 'total', (now - $total-start).Num;
+  printf "  %-7s %7.2fs\n", 'total', (now - $total-start).Num;
 }
 
 for @stages -> $s {
   my @cmd = $s<cmd>.list;
-  say "==> [{format-ts()}] @cmd.join(' ')";
+  my %extra-env = ($s<env> // %()).hash;
+  my $env-prefix = %extra-env.elems
+  ?? %extra-env.kv.map(-> $k, $v { "$k=$v" }).join(' ') ~ ' '
+  !! '';
+  say "==> [{format-ts()}] $env-prefix@cmd.join(' ')";
   my $start = now;
-  my $proc  = run(|@cmd);
+  my %old-env;
+  for %extra-env.kv -> $k, $v {
+    %old-env{$k} = %*ENV{$k};
+    %*ENV{$k} = $v;
+  }
+  my $proc = run(|@cmd);
+  for %old-env.kv -> $k, $v {
+    if $v.defined { %*ENV{$k} = $v } else { %*ENV{$k}:delete }
+  }
   %durations{$s<name>} = (now - $start).Num;
   exit $proc.exitcode unless $proc.exitcode == 0;
   say '';

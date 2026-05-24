@@ -1,0 +1,272 @@
+#!/usr/bin/env raku
+
+use v6;
+use lib 'lib';
+use Test;
+use Console::Blackjack;
+use Console::Blackjack::Shoe;
+use Console::Blackjack::PlayerHand;
+use Console::Blackjack::DealerHand;
+use Console::Blackjack::Hand;
+use Console::Blackjack::Card;
+
+plan 39;
+
+# Game's BUILD reads/writes 'bj.txt' in CWD; isolate to a tmpdir.
+my $orig-cwd = $*CWD;
+my $tmpdir = ($*TMPDIR ~ '/console-blackjack-test-' ~ $*PID).IO;
+$tmpdir.mkdir;
+chdir $tmpdir;
+
+LEAVE {
+  chdir $orig-cwd;
+  for $tmpdir.dir -> $f { $f.unlink if $f.f; }
+  $tmpdir.rmdir;
+}
+
+# fresh construction (no save file present)
+PlayerHand.total-player-hands = 0;
+my $game = Game.new;
+isa-ok $game, Game, 'Game.new returns a Game';
+is $game.money, 100.0, 'starting money is 100.0';
+isa-ok $game.shoe, Shoe, 'shoe is a Shoe';
+is $game.current-player-hand, 0, 'current-player-hand starts at 0';
+is $game.player-hands.elems, 0, 'player-hands starts empty';
+is Shoe.num-decks, 8, 'BUILD sets num-decks to 8';
+is Shoe.deck-type, 1, 'BUILD sets deck-type to 1';
+is Card.face-type, 1, 'BUILD sets face-type to 1';
+
+# all-bets sums bets across player hands
+PlayerHand.total-player-hands = 0;
+$game.player-hands.push(PlayerHand.new(game => $game, bet => 5.0));
+$game.player-hands.push(PlayerHand.new(game => $game, bet => 7.5));
+is $game.all-bets, 12.5, 'all-bets sums all player-hand bets';
+
+# more-hands-to-play: False when on last (only) hand
+$game.player-hands = [];
+PlayerHand.total-player-hands = 0;
+$game.player-hands.push(PlayerHand.new(game => $game, bet => 5.0));
+nok $game.more-hands-to-play, 'more-hands-to-play False when on the only hand';
+
+# more-hands-to-play: True when not yet on the last hand
+$game.player-hands.push(PlayerHand.new(game => $game, bet => 5.0));
+ok $game.more-hands-to-play, 'more-hands-to-play True when more hands remain';
+
+# need-to-play-dealer-hand: True when at least one hand is neither busted nor blackjack
+PlayerHand.total-player-hands = 0;
+$game.player-hands = [];
+my $active = PlayerHand.new(game => $game, bet => 5.0);
+$active.cards = [Card.new(value => 4, suit => 0), Card.new(value => 5, suit => 0)];
+$game.player-hands.push($active);
+ok $game.need-to-play-dealer-hand, 'need-to-play-dealer-hand True when an active hand exists';
+
+# need-to-play-dealer-hand: False when all hands are busted or blackjack
+$game.player-hands = [];
+PlayerHand.total-player-hands = 0;
+my $busted = PlayerHand.new(game => $game, bet => 5.0);
+$busted.cards = [
+  Card.new(value => 9, suit => 0),
+  Card.new(value => 9, suit => 1),
+  Card.new(value => 9, suit => 2),
+];
+my $bj = PlayerHand.new(game => $game, bet => 5.0);
+$bj.cards = [Card.new(value => 0, suit => 0), Card.new(value => 12, suit => 0)];
+$game.player-hands.push($busted);
+$game.player-hands.push($bj);
+nok $game.need-to-play-dealer-hand, 'need-to-play-dealer-hand False when all hands are busted or BJ';
+
+# save-game and load-game round trip
+$game.money = 250.0;
+Shoe.num-decks = 4;
+Shoe.deck-type = 2;
+Card.face-type = 2;
+$game.save-game;
+ok 'bj.txt'.IO.e, 'save-game writes bj.txt';
+is 'bj.txt'.IO.slurp, '4|2|2|250|5', 'save-game writes expected pipe-delimited fields';
+
+# Mutating then reloading restores from disk
+Shoe.num-decks = 1;
+Shoe.deck-type = 1;
+Card.face-type = 1;
+$game.money = 0.0;
+$game.load-game;
+is Shoe.num-decks, 4, 'load-game restores num-decks';
+is Shoe.deck-type, 2, 'load-game restores deck-type';
+is Card.face-type, 2, 'load-game restores face-type';
+
+# load-game resets to starting money when saved money is below min-bet
+'bj.txt'.IO.spurt('4|1|1|1|5');
+Card.face-type = 1;
+my $low-game = Game.new;
+is $low-game.money, 100.0, 'load-game resets money to starting when at or below min-bet';
+
+# Access private attrs via MOP so we can drive pay-hands / play-dealer-hand
+# / normalize-current-bet without going through the interactive deal-new-hand path.
+sub dealer-hand-of($g) {
+  $g.^attributes.first(*.name eq '$!dealer-hand').get_value($g);
+}
+
+# Game.BUILD constructs its dealer-hand BEFORE assigning $!shoe, so the
+# Hand parent BUILD wires that dealer-hand's shoe to the (uninitialized)
+# Shoe type. For tests that actually deal to the dealer, swap in a fresh
+# DealerHand built after $.shoe is live.
+sub install-fresh-dealer($g) {
+  my $dh = DealerHand.new(game => $g);
+  $g.^attributes.first(*.name eq '$!dealer-hand').set_value($g, $dh);
+  $dh;
+}
+
+# pay-hands: dealer busts → all non-paid hands win
+PlayerHand.total-player-hands = 0;
+my $pay-bust-game = Game.new;
+my $pay-bust-dealer = dealer-hand-of($pay-bust-game);
+$pay-bust-dealer.cards = [
+  Card.new(value => 9, suit => 0),
+  Card.new(value => 9, suit => 1),
+  Card.new(value => 9, suit => 2),
+];
+$pay-bust-dealer.hide-down-card = False;
+my $pay-bust-player = PlayerHand.new(game => $pay-bust-game, bet => 10.0);
+$pay-bust-player.cards = [Card.new(value => 7, suit => 0), Card.new(value => 8, suit => 0)];
+$pay-bust-game.player-hands.push($pay-bust-player);
+my $pay-bust-start-money = $pay-bust-game.money;
+$pay-bust-game.pay-hands;
+is $pay-bust-player.status, Hand::Status::Won, 'pay-hands marks player Won when dealer busts';
+is $pay-bust-game.money, $pay-bust-start-money + 10.0, 'pay-hands credits bet when dealer busts';
+ok $pay-bust-player.paid, 'pay-hands marks the hand paid';
+
+# pay-hands: player blackjack vs dealer 18 → 1.5x payout
+PlayerHand.total-player-hands = 0;
+my $pay-bj-game = Game.new;
+my $pay-bj-dealer = dealer-hand-of($pay-bj-game);
+$pay-bj-dealer.cards = [Card.new(value => 7, suit => 0), Card.new(value => 9, suit => 0)];
+$pay-bj-dealer.hide-down-card = False;
+my $pay-bj-player = PlayerHand.new(game => $pay-bj-game, bet => 10.0);
+$pay-bj-player.cards = [Card.new(value => 0, suit => 0), Card.new(value => 12, suit => 0)];
+$pay-bj-game.player-hands.push($pay-bj-player);
+my $pay-bj-start = $pay-bj-game.money;
+$pay-bj-game.pay-hands;
+is $pay-bj-player.status, Hand::Status::Won, 'pay-hands marks blackjack Won';
+is $pay-bj-game.money, $pay-bj-start + 15.0, 'pay-hands pays blackjack at 1.5x';
+
+# pay-hands: player < dealer → Lost
+PlayerHand.total-player-hands = 0;
+my $pay-lose-game = Game.new;
+my $pay-lose-dealer = dealer-hand-of($pay-lose-game);
+$pay-lose-dealer.cards = [Card.new(value => 9, suit => 0), Card.new(value => 9, suit => 0)];
+$pay-lose-dealer.hide-down-card = False;
+my $pay-lose-player = PlayerHand.new(game => $pay-lose-game, bet => 10.0);
+$pay-lose-player.cards = [Card.new(value => 7, suit => 0), Card.new(value => 8, suit => 0)];
+$pay-lose-game.player-hands.push($pay-lose-player);
+my $pay-lose-start = $pay-lose-game.money;
+$pay-lose-game.pay-hands;
+is $pay-lose-player.status, Hand::Status::Lost, 'pay-hands marks loss when player < dealer';
+is $pay-lose-game.money, $pay-lose-start - 10.0, 'pay-hands deducts bet on loss';
+
+# pay-hands: player == dealer → Push
+PlayerHand.total-player-hands = 0;
+my $pay-push-game = Game.new;
+my $pay-push-dealer = dealer-hand-of($pay-push-game);
+$pay-push-dealer.cards = [Card.new(value => 9, suit => 0), Card.new(value => 9, suit => 0)];
+$pay-push-dealer.hide-down-card = False;
+my $pay-push-player = PlayerHand.new(game => $pay-push-game, bet => 10.0);
+$pay-push-player.cards = [Card.new(value => 9, suit => 1), Card.new(value => 9, suit => 2)];
+$pay-push-game.player-hands.push($pay-push-player);
+my $pay-push-start = $pay-push-game.money;
+$pay-push-game.pay-hands;
+is $pay-push-player.status, Hand::Status::Push, 'pay-hands marks Push when player == dealer';
+is $pay-push-game.money, $pay-push-start, 'pay-hands leaves money unchanged on Push';
+
+# pay-hands: already-paid hand is skipped
+PlayerHand.total-player-hands = 0;
+my $skip-game = Game.new;
+my $skip-dealer = dealer-hand-of($skip-game);
+$skip-dealer.cards = [Card.new(value => 9, suit => 0), Card.new(value => 9, suit => 0)];
+$skip-dealer.hide-down-card = False;
+my $skip-player = PlayerHand.new(game => $skip-game, bet => 10.0);
+$skip-player.cards = [Card.new(value => 7, suit => 0), Card.new(value => 8, suit => 0)];
+$skip-player.paid = True;
+$skip-player.status = Hand::Status::Won;
+$skip-game.player-hands.push($skip-player);
+my $skip-start = $skip-game.money;
+$skip-game.pay-hands;
+is $skip-player.status, Hand::Status::Won, 'pay-hands does not change status of already-paid hand';
+is $skip-game.money, $skip-start, 'pay-hands does not touch money for already-paid hand';
+
+# play-dealer-hand: no need to play (all players busted) → dealer marked played
+PlayerHand.total-player-hands = 0;
+my $no-play-game = Game.new;
+my $no-play-dealer = dealer-hand-of($no-play-game);
+$no-play-dealer.cards = [Card.new(value => 5, suit => 0), Card.new(value => 5, suit => 0)];
+my $no-play-player = PlayerHand.new(game => $no-play-game, bet => 5.0);
+$no-play-player.cards = [
+  Card.new(value => 9, suit => 0),
+  Card.new(value => 9, suit => 1),
+  Card.new(value => 9, suit => 2),
+];
+$no-play-game.player-hands.push($no-play-player);
+$no-play-game.play-dealer-hand;
+ok $no-play-dealer.played, 'play-dealer-hand marks dealer played when no need to play';
+is $no-play-dealer.cards.elems, 2, 'play-dealer-hand does not deal extra cards when no need to play';
+
+# play-dealer-hand: dealer blackjack on initial deal → hide-down-card flipped
+PlayerHand.total-player-hands = 0;
+my $dbj-game = Game.new;
+my $dbj-dealer = dealer-hand-of($dbj-game);
+$dbj-dealer.cards = [Card.new(value => 0, suit => 0), Card.new(value => 12, suit => 0)];
+$dbj-dealer.hide-down-card = True;
+my $dbj-player = PlayerHand.new(game => $dbj-game, bet => 5.0);
+$dbj-player.cards = [
+  Card.new(value => 9, suit => 0),
+  Card.new(value => 9, suit => 1),
+  Card.new(value => 9, suit => 2),
+];
+$dbj-game.player-hands.push($dbj-player);
+$dbj-game.play-dealer-hand;
+nok $dbj-dealer.hide-down-card, 'play-dealer-hand reveals down card on dealer blackjack';
+
+# play-dealer-hand: dealer hits until soft >= 18 or hard >= 17
+PlayerHand.total-player-hands = 0;
+my $hit-loop-game = Game.new;
+my $hit-loop-dealer = install-fresh-dealer($hit-loop-game);
+$hit-loop-dealer.cards = [Card.new(value => 4, suit => 0), Card.new(value => 5, suit => 0)];
+$hit-loop-dealer.hide-down-card = False;
+my $hit-loop-player = PlayerHand.new(game => $hit-loop-game, bet => 5.0);
+$hit-loop-player.cards = [Card.new(value => 9, suit => 0), Card.new(value => 9, suit => 1)];
+$hit-loop-game.player-hands.push($hit-loop-player);
+$hit-loop-game.play-dealer-hand;
+ok $hit-loop-dealer.cards.elems > 2, 'play-dealer-hand dealt extra cards when needed';
+ok $hit-loop-dealer.get-value(Hand::CountMethod::Soft) >= 17,
+   'dealer stopped at a valid stand value';
+ok $hit-loop-dealer.played, 'play-dealer-hand marks played after hitting';
+
+# normalize-current-bet exercised by loading specific bj.txt values
+# then calling pay-hands (which calls normalize then save-game).
+
+# below min-bet (5.0): clamps up to 5
+PlayerHand.total-player-hands = 0;
+'bj.txt'.IO.spurt('8|1|1|100|1');
+my $norm-low-game = Game.new;
+$norm-low-game.pay-hands;
+is 'bj.txt'.IO.slurp.split('|')[4], '5', 'normalize-current-bet clamps below min-bet up to 5';
+
+# above max-bet (1000000): clamps down to 1000000
+PlayerHand.total-player-hands = 0;
+'bj.txt'.IO.spurt('8|1|1|2000000|1500000');
+my $norm-max-game = Game.new;
+$norm-max-game.pay-hands;
+is 'bj.txt'.IO.slurp.split('|')[4], '1000000', 'normalize-current-bet clamps above max-bet down to max-bet';
+
+# current-bet > money: clamps down to money
+PlayerHand.total-player-hands = 0;
+'bj.txt'.IO.spurt('8|1|1|100|500');
+my $norm-money-game = Game.new;
+$norm-money-game.pay-hands;
+is 'bj.txt'.IO.slurp.split('|')[4], '100', 'normalize-current-bet clamps above money down to money';
+
+# reset
+Shoe.num-decks = 8;
+Shoe.deck-type = 1;
+Card.face-type = 1;
+
+done-testing;

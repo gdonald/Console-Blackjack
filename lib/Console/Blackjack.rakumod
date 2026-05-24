@@ -6,20 +6,21 @@ use Console::Blackjack::DealerHand;
 use Console::Blackjack::PlayerHand;
 use Console::Blackjack::Hand;
 use Console::Blackjack::Card;
+use Console::Blackjack::Terminal;
 
 class Game is export {
   has Str $!save-file;
   has Rat $!starting-money;
   has Rat $!min-bet;
   has Rat $!max-bet;
-  has IO::Handle $!tty;
-  has Shoe $.shoe;
+  has Shoe $.shoe is rw;
   has DealerHand $!dealer-hand;
   has PlayerHand @.player-hands;
   has Int $.current-player-hand;
   has Rat $!current-bet;
   has Rat $.money is rw;
   has Bool $!quitting;
+  has Terminal $.terminal is rw;
 
   submethod BUILD {
     $!quitting = False;
@@ -29,6 +30,7 @@ class Game is export {
     $!current-bet = 5.0;
     $!starting-money = 100.0;
     $!money = $!starting-money;
+    $!terminal = Terminal.new;
     Shoe.num-decks = 8;
     Shoe.deck-type = 1;
     Card.face-type = 1;
@@ -46,11 +48,7 @@ class Game is export {
   }
 
   method read-one-char(--> Str) {
-    $!tty = "/dev/tty".IO.open;
-    shell "stty raw -echo min 1 time 1";
-    my Str $c = $!tty.read(1).decode('utf-8');
-    shell "stty sane";
-    $c;
+    $!terminal.read-one-char;
   }
 
   method all-bets(--> Rat) {
@@ -163,10 +161,9 @@ class Game is export {
       return;
     }
 
-    $!dealer-hand.hide-down-card = False if $!dealer-hand.is-done;
-    $!dealer-hand.hide-down-card = False if  $player-hand.is-done;
+    $!dealer-hand.hide-down-card = False if $player-hand.is-done;
 
-    if $!dealer-hand.is-done || $player-hand.is-done {
+    if $player-hand.is-done {
       self.pay-hands;
       self.draw-hands;
       self.draw-player-bet-options;
@@ -417,7 +414,7 @@ class Game is export {
     $opts ~= "\n";
     $opts ~= '  Enter New Number Of Decks: ';
 
-    my Int $tmp = prompt $opts;
+    my Int $tmp = $!terminal.prompt($opts);
 
     $tmp = 1 if $tmp < 1;
     $tmp = 8 if $tmp > 8;
@@ -437,7 +434,7 @@ class Game is export {
     $opts ~= "\n";
     $opts ~= '  Enter New Bet: $';
 
-    my Str $bet = prompt $opts;
+    my Str $bet = $!terminal.prompt($opts);
     $!current-bet = $bet.Rat;
 
     self.normalize-current-bet;
@@ -474,6 +471,6 @@ class Game is export {
   }
 
   method clear {
-    shell 'export TERM=linux; clear';
+    $!terminal.clear;
   }
 }

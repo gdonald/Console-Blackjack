@@ -1,0 +1,54 @@
+#!/usr/bin/env raku
+
+use v6;
+use lib 'lib';
+use Test;
+use Console::Blackjack::Card;
+
+plan 22;
+
+# Card construction
+my $ace-spades = Card.new(value => 0, suit => 0);
+isa-ok $ace-spades, Card, 'Card.new returns a Card';
+is $ace-spades.value, 0, 'value=0 for Ace';
+
+# is-ace
+ok Card.new(value => 0, suit => 0).is-ace,  'value=0 is an ace';
+nok Card.new(value => 1, suit => 0).is-ace, 'value=1 is not an ace';
+nok Card.new(value => 9, suit => 0).is-ace, 'Jack is not an ace';
+
+# is-ten (value > 8 → T, J, Q, K)
+nok Card.new(value => 8, suit => 0).is-ten, 'value=8 (nine) is not a ten';
+ok Card.new(value =>  9, suit => 0).is-ten, 'value=9 (ten) is a ten';
+ok Card.new(value => 10, suit => 0).is-ten, 'value=10 (Jack) is a ten';
+ok Card.new(value => 11, suit => 0).is-ten, 'value=11 (Queen) is a ten';
+ok Card.new(value => 12, suit => 0).is-ten, 'value=12 (King) is a ten';
+
+# faces tables
+is Card.faces.elems,  14, 'faces table has 14 rows (13 ranks + hidden)';
+is Card.faces2.elems, 14, 'faces2 table has 14 rows';
+is Card.faces[0][0],  'A♠', 'faces[0][0] is A♠';
+is Card.faces[12][3], 'K♦', 'faces[12][3] is K♦';
+is Card.faces[13][0], '??', 'faces[13][0] is the hidden card';
+is Card.faces2[0][0], '🂡', 'faces2[0][0] is 🂡';
+
+# draw – face-type 1 returns ASCII faces
+Card.face-type = 1;
+is Card.new(value => 0,  suit => 0).draw, 'A♠', 'draw A♠ when face-type=1';
+is Card.new(value => 12, suit => 3).draw, 'K♦', 'draw K♦ when face-type=1';
+
+# draw – face-type 2 returns unicode faces
+Card.face-type = 2;
+is Card.new(value => 0, suit => 0).draw, '🂡', 'draw unicode ace when face-type=2';
+is Card.new(value => 9, suit => 1).draw, '🂺', 'draw unicode ten of hearts';
+
+# face-type accessor
+Card.face-type = 1;
+is Card.face-type, 1, 'face-type class attribute is settable to 1';
+Card.face-type = 2;
+is Card.face-type, 2, 'face-type class attribute is settable to 2';
+
+# restore default
+Card.face-type = 1;
+
+done-testing;

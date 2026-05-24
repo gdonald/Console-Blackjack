@@ -8,14 +8,15 @@
   "auth": "zef:gdonald",
   "depends": [],
   "build-depends": [],
-  "test-depends": ["JSON::Fast", "Test::META"],
+  "test-depends": ["JSON::Fast", "Test::META", "BDD::Behave"],
   "provides": {
     "Console::Blackjack": "lib/Console/Blackjack.rakumod",
     "Console::Blackjack::Card": "lib/Console/Blackjack/Card.rakumod",
     "Console::Blackjack::DealerHand": "lib/Console/Blackjack/DealerHand.rakumod",
     "Console::Blackjack::Hand": "lib/Console/Blackjack/Hand.rakumod",
     "Console::Blackjack::PlayerHand": "lib/Console/Blackjack/PlayerHand.rakumod",
-    "Console::Blackjack::Shoe": "lib/Console/Blackjack/Shoe.rakumod"
+    "Console::Blackjack::Shoe": "lib/Console/Blackjack/Shoe.rakumod",
+    "Console::Blackjack::Terminal": "lib/Console/Blackjack/Terminal.rakumod"
   },
   "support": {
     "source": "https://github.com/gdonald/Console-Blackjack.git",

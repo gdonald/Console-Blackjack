@@ -1,0 +1,779 @@
+#!/usr/bin/env raku
+
+use v6;
+use lib 'lib';
+use Test;
+use Console::Blackjack;
+use Console::Blackjack::Shoe;
+use Console::Blackjack::DealerHand;
+use Console::Blackjack::PlayerHand;
+use Console::Blackjack::Hand;
+use Console::Blackjack::Card;
+use Console::Blackjack::Terminal;
+
+plan 100;
+
+my $orig-cwd = $*CWD;
+my $tmpdir = ($*TMPDIR ~ '/console-blackjack-int-' ~ $*PID).IO;
+$tmpdir.mkdir;
+chdir $tmpdir;
+
+LEAVE {
+  chdir $orig-cwd;
+  for $tmpdir.dir -> $f { $f.unlink if $f.f; }
+  $tmpdir.rmdir;
+}
+
+# Scripted Terminal implementation that returns canned responses
+# from an input queue, swallowing the actual TTY/shell operations.
+class ScriptedTerminal is Terminal {
+  has @.input;
+  has Int $.cursor is rw = 0;
+  has Int $.clear-calls is rw = 0;
+  method read-one-char(--> Str) {
+    die "ScriptedTerminal input exhausted at cursor=$!cursor (queue: @!input.join(','))"
+      if $!cursor >= @!input.elems;
+    @!input[$!cursor++];
+  }
+  method clear() { ++$!clear-calls; }
+  method prompt($msg) {
+    die "ScriptedTerminal prompt exhausted at cursor=$!cursor (queue: @!input.join(','))"
+      if $!cursor >= @!input.elems;
+    val(@!input[$!cursor++]);
+  }
+}
+
+sub captured-out(&block) {
+  my $out = '';
+  my $*OUT = class {
+    method print(*@a) { $out ~= @a.join; }
+    method say(*@a)   { $out ~= @a.join ~ "\n"; }
+    method flush() {}
+  }.new;
+  block();
+  $out;
+}
+
+sub dealer-of($g) {
+  $g.^attributes.first(*.name eq '$!dealer-hand').get_value($g);
+}
+
+sub quitting-of($g) {
+  $g.^attributes.first(*.name eq '$!quitting').get_value($g);
+}
+
+sub current-bet-of($g) {
+  $g.^attributes.first(*.name eq '$!current-bet').get_value($g);
+}
+
+sub fresh-dealer($g) {
+  my $dh = DealerHand.new(game => $g);
+  $g.^attributes.first(*.name eq '$!dealer-hand').set_value($g, $dh);
+  $dh;
+}
+
+sub mk-game(*@input) {
+  PlayerHand.total-player-hands = 0;
+  'bj.txt'.IO.unlink if 'bj.txt'.IO.e;
+  my $g = Game.new;
+  $g.terminal = ScriptedTerminal.new(input => @input);
+  $g;
+}
+
+sub install-shoe($g, Int :$deck-type, Int :$num-decks = 1) {
+  Shoe.deck-type = $deck-type;
+  Shoe.num-decks = $num-decks;
+  $g.shoe = Shoe.new;
+}
+
+# Game.read-one-char delegates to terminal
+{
+  my $g = mk-game(<x y z>);
+  is $g.read-one-char, 'x', 'Game.read-one-char delegates to terminal (1st)';
+  is $g.read-one-char, 'y', 'Game.read-one-char delegates to terminal (2nd)';
+  is $g.read-one-char, 'z', 'Game.read-one-char delegates to terminal (3rd)';
+}
+
+# Game.clear delegates to terminal
+{
+  my $g = mk-game(());
+  $g.clear;
+  $g.clear;
+  is $g.terminal.clear-calls, 2, 'Game.clear delegates to terminal.clear';
+}
+
+# Terminal default constructible
+{
+  my $t = Terminal.new;
+  isa-ok $t, Terminal, 'Terminal.new returns a Terminal';
+  ok $t.can('read-one-char'), 'Terminal has read-one-char method';
+  ok $t.can('clear'),         'Terminal has clear method';
+  ok $t.can('prompt'),        'Terminal has prompt method';
+}
+
+# Terminal.clear writes escape bytes to $*OUT. Capture them so the next
+# TAP `ok` line starts on a fresh column.
+{
+  my $captured = '';
+  {
+    my $*OUT = class {
+      method print(*@a) { $captured ~= @a.join; }
+      method say(*@a)   { $captured ~= @a.join ~ "\n"; }
+      method flush      {}
+    }.new;
+    Terminal.new.clear;
+  }
+  is $captured, "\e[H\e[J", 'Terminal.clear emits the home + clear escape bytes';
+}
+
+# Terminal.prompt reads a line from $*IN. The prompt string is written to
+# STDOUT — same newline-flush trick as above.
+{
+  my $tmp = ($*TMPDIR ~ '/console-blackjack-terminal-prompt-' ~ $*PID).IO;
+  $tmp.spurt("hello\n");
+  my $fh = $tmp.open;
+  my $r;
+  {
+    my $*IN = $fh;
+    $r = Terminal.new.prompt('msg: ');
+  }
+  $fh.close;
+  $tmp.unlink;
+  print "\n";
+  is $r, 'hello', 'Terminal.prompt returns a line read from $*IN';
+}
+
+# draw-hands prints dealer, money, and player-hand rows
+{
+  PlayerHand.total-player-hands = 0;
+  my $g = mk-game(());
+  fresh-dealer($g).cards = [Card.new(value => 0, suit => 0), Card.new(value => 12, suit => 0)];
+  dealer-of($g).hide-down-card = False;
+  my $ph = PlayerHand.new(game => $g, bet => 5.0);
+  $ph.cards = [Card.new(value => 4, suit => 0), Card.new(value => 5, suit => 0)];
+  $g.player-hands.push($ph);
+  my $out = captured-out(-> { $g.draw-hands; });
+  ok $out.contains('Dealer'), 'draw-hands renders Dealer label';
+  ok $out.contains('Player'), 'draw-hands renders Player label';
+  ok $out.contains('A♠'),     'draw-hands renders dealer cards';
+  is $g.terminal.clear-calls, 1, 'draw-hands calls terminal.clear';
+}
+
+# insure-hand: bet halved, paid+played+Lost, money -= bet
+{
+  my $g = mk-game(<q>);
+  my $ph = PlayerHand.new(game => $g, bet => 10.0);
+  $ph.cards = [Card.new(value => 0, suit => 0), Card.new(value => 5, suit => 0)];
+  $g.player-hands.push($ph);
+  my $start = $g.money;
+  captured-out(-> { $g.insure-hand; });
+  is $ph.bet, 5.0,                'insure-hand halves the bet';
+  ok $ph.played,                  'insure-hand marks played';
+  ok $ph.paid,                    'insure-hand marks paid';
+  is $ph.status, Hand::Status::Lost, 'insure-hand sets status to Lost';
+  is $g.money, $start - 5.0,      'insure-hand deducts halved bet from money';
+  ok quitting-of($g),             'insure-hand chains into draw-player-bet-options which sees q';
+}
+
+# ask-insurance: y branch calls insure-hand
+{
+  my $g = mk-game(<y q>);
+  my $ph = PlayerHand.new(game => $g, bet => 10.0);
+  $ph.cards = [Card.new(value => 0, suit => 0), Card.new(value => 5, suit => 0)];
+  $g.player-hands.push($ph);
+  captured-out(-> { $g.ask-insurance; });
+  is $ph.status, Hand::Status::Lost, 'ask-insurance y goes through insure-hand';
+}
+
+# ask-insurance: n branch with dealer blackjack pays out
+{
+  my $g = mk-game(<n q>);
+  fresh-dealer($g).cards = [Card.new(value => 0, suit => 0), Card.new(value => 12, suit => 0)];
+  my $ph = PlayerHand.new(game => $g, bet => 10.0);
+  $ph.cards = [Card.new(value => 9, suit => 0), Card.new(value => 8, suit => 0)];
+  $g.player-hands.push($ph);
+  my $start = $g.money;
+  captured-out(-> { $g.ask-insurance; });
+  is $ph.status, Hand::Status::Lost, 'ask-insurance n + dealer BJ → player loses';
+  is $g.money, $start - 10.0,        'ask-insurance n + dealer BJ deducts bet';
+  ok quitting-of($g),                'ask-insurance n + dealer BJ ends at bet-options q';
+}
+
+# ask-insurance: n branch with player already done (BJ)
+{
+  my $g = mk-game(<n q>);
+  fresh-dealer($g).cards = [Card.new(value => 0, suit => 0), Card.new(value => 4, suit => 0)];
+  my $ph = PlayerHand.new(game => $g, bet => 10.0);
+  $ph.cards = [Card.new(value => 0, suit => 0), Card.new(value => 12, suit => 0)];
+  $g.player-hands.push($ph);
+  my $start = $g.money;
+  captured-out(-> { $g.ask-insurance; });
+  is $ph.status, Hand::Status::Won, 'ask-insurance n + player BJ → player wins';
+  ok $g.money > $start,             'ask-insurance n + player BJ credits bet';
+}
+
+# ask-insurance: n + no dealer BJ + player not done → no-insurance else branch (get-action)
+{
+  my $g = mk-game('n', 's', 'q');
+  fresh-dealer($g).cards = [Card.new(value => 0, suit => 0), Card.new(value => 4, suit => 0)];
+  my $ph = PlayerHand.new(game => $g, bet => 5.0);
+  $ph.cards = [Card.new(value => 4, suit => 0), Card.new(value => 5, suit => 0)];
+  $g.player-hands.push($ph);
+  captured-out(-> { $g.ask-insurance; });
+  ok $ph.stood, 'ask-insurance n + no-BJ + not-done → no-insurance else → get-action';
+}
+
+# ask-insurance: default char triggers recursion, eventually reads y
+{
+  my $g = mk-game(<x y q>);
+  my $ph = PlayerHand.new(game => $g, bet => 10.0);
+  $ph.cards = [Card.new(value => 0, suit => 0), Card.new(value => 5, suit => 0)];
+  $g.player-hands.push($ph);
+  captured-out(-> { $g.ask-insurance; });
+  is $ph.status, Hand::Status::Lost, 'ask-insurance recovers from invalid char via recursion';
+}
+
+# draw-player-bet-options: q quits
+{
+  my $g = mk-game(<q>);
+  captured-out(-> { $g.draw-player-bet-options; });
+  ok quitting-of($g), 'draw-player-bet-options q sets quitting';
+}
+
+# draw-player-bet-options: b → get-new-bet (prompts for bet)
+# Use a jacks-only shoe so dealer up-card is never an ace (no ask-insurance)
+# and player never gets blackjack — the chain is deterministic.
+{
+  my $g = mk-game('b', '25', 's', 'q');
+  install-shoe($g, deck-type => 3);
+  captured-out(-> { $g.draw-player-bet-options; });
+  is current-bet-of($g), 25.0, 'draw-player-bet-options b → get-new-bet sets current-bet';
+}
+
+# draw-player-bet-options: o → game-options then back
+{
+  my $g = mk-game(<o b q>);
+  captured-out(-> { $g.draw-player-bet-options; });
+  ok quitting-of($g), 'draw-player-bet-options o → game-options b → bet-options q';
+}
+
+# draw-player-bet-options: d → deal (returns without quitting)
+{
+  my $g = mk-game(<d>);
+  captured-out(-> { $g.draw-player-bet-options; });
+  nok quitting-of($g), 'draw-player-bet-options d does not quit';
+}
+
+# draw-player-bet-options: invalid char recurses
+{
+  my $g = mk-game(<x q>);
+  captured-out(-> { $g.draw-player-bet-options; });
+  ok quitting-of($g), 'draw-player-bet-options invalid char recurses, next char takes effect';
+}
+
+# game-options: n → get-new-num-decks (prompts)
+{
+  my $g = mk-game('n', '4', 'b', 'q');
+  captured-out(-> { $g.game-options; });
+  is Shoe.num-decks, 4, 'game-options n → get-new-num-decks sets num-decks';
+}
+
+# game-options: t → get-new-deck-type
+{
+  my $g = mk-game(<t 2 q>);
+  captured-out(-> { $g.game-options; });
+  is Shoe.deck-type, 2, 'game-options t → get-new-deck-type sets deck-type';
+}
+
+# game-options: f → get-new-face-type
+{
+  Card.face-type = 1;
+  my $g = mk-game(<f 2 q>);
+  captured-out(-> { $g.game-options; });
+  is Card.face-type, 2, 'game-options f → get-new-face-type sets face-type';
+}
+
+# game-options: b → back
+{
+  my $g = mk-game(<b q>);
+  captured-out(-> { $g.game-options; });
+  ok quitting-of($g), 'game-options b returns to bet-options';
+}
+
+# game-options: default recurses
+{
+  my $g = mk-game(<x b q>);
+  captured-out(-> { $g.game-options; });
+  ok quitting-of($g), 'game-options invalid char recurses';
+}
+
+# get-new-face-type: each branch
+{
+  Card.face-type = 1;
+  my $g = mk-game(<2 q>);
+  captured-out(-> { $g.get-new-face-type; });
+  is Card.face-type, 2, 'get-new-face-type 2 sets face-type=2';
+}
+{
+  Card.face-type = 2;
+  my $g = mk-game(<1 q>);
+  captured-out(-> { $g.get-new-face-type; });
+  is Card.face-type, 1, 'get-new-face-type 1 sets face-type=1';
+}
+{
+  Card.face-type = 1;
+  # The default branch in get-new-face-type recurses but also still falls
+  # through to the outer `if $br` block, so two `q`s are needed: one for
+  # the inner branch's bet-options, one for the outer's.
+  my $g = mk-game('x', '2', 'q', 'q');
+  captured-out(-> { $g.get-new-face-type; });
+  ok quitting-of($g), 'get-new-face-type default char recurses, eventually quits';
+}
+
+# get-new-deck-type: each branch
+for 1..6 -> $type {
+  Shoe.deck-type = 1;
+  Shoe.num-decks = 1;
+  my $g = mk-game($type.Str, 'q');
+  captured-out(-> { $g.get-new-deck-type; });
+  is Shoe.deck-type, $type, "get-new-deck-type $type sets deck-type=$type";
+  if $type != 1 {
+    is Shoe.num-decks, 8, "get-new-deck-type non-regular forces num-decks=8";
+  }
+}
+{
+  Shoe.deck-type = 1;
+  # Same recursion-with-fall-through quirk as get-new-face-type.
+  my $g = mk-game('x', '3', 'q', 'q');
+  captured-out(-> {
+    try { $g.get-new-deck-type; }
+  });
+  ok quitting-of($g), 'get-new-deck-type default recurses, eventually quits';
+}
+
+# get-new-num-decks: prompt clamps to 1..8
+{
+  Shoe.num-decks = 1;
+  my $g = mk-game('5', 'b', 'q');
+  captured-out(-> { $g.get-new-num-decks; });
+  is Shoe.num-decks, 5, 'get-new-num-decks sets num-decks';
+}
+{
+  Shoe.num-decks = 4;
+  my $g = mk-game('0', 'b', 'q');
+  captured-out(-> { $g.get-new-num-decks; });
+  is Shoe.num-decks, 1, 'get-new-num-decks clamps 0 to 1';
+}
+{
+  Shoe.num-decks = 4;
+  my $g = mk-game('99', 'b', 'q');
+  captured-out(-> { $g.get-new-num-decks; });
+  is Shoe.num-decks, 8, 'get-new-num-decks clamps 99 to 8';
+}
+
+# get-new-bet sets current-bet
+{
+  my $g = mk-game('b', '50', 's', 'q');
+  install-shoe($g, deck-type => 3);
+  captured-out(-> { $g.draw-player-bet-options; });
+  is current-bet-of($g), 50.0, 'get-new-bet sets current-bet';
+}
+
+# play-more-hands: increment current-player-hand, deal a card, get-action
+{
+  my $g = mk-game(<s q>);
+  fresh-dealer($g).cards = [Card.new(value => 9, suit => 0), Card.new(value => 8, suit => 0)];
+  dealer-of($g).hide-down-card = False;
+  my $h1 = PlayerHand.new(game => $g, bet => 5.0);
+  $h1.cards = [Card.new(value => 9, suit => 0), Card.new(value => 9, suit => 1)];
+  $h1.played = True;
+  my $h2 = PlayerHand.new(game => $g, bet => 5.0);
+  $h2.cards = [Card.new(value => 5, suit => 0)];
+  $g.player-hands.push($h1);
+  $g.player-hands.push($h2);
+  captured-out(-> { $g.play-more-hands; });
+  is $g.current-player-hand, 1, 'play-more-hands advances current-player-hand';
+  ok $h2.cards.elems >= 2, 'play-more-hands deals a card to the next hand';
+}
+
+# play-more-hands: if dealt card makes hand done (busts)
+{
+  my $g = mk-game('q');
+  install-shoe($g, deck-type => 6);  # eights-only shoe
+  fresh-dealer($g).cards = [Card.new(value => 9, suit => 0), Card.new(value => 8, suit => 0)];
+  dealer-of($g).hide-down-card = False;
+  my $h1 = PlayerHand.new(game => $g, bet => 5.0);
+  $h1.cards = [Card.new(value => 0, suit => 0), Card.new(value => 12, suit => 0)];
+  $h1.played = True;
+  my $h2 = PlayerHand.new(game => $g, bet => 5.0);
+  $h2.cards = [Card.new(value => 9, suit => 0), Card.new(value => 9, suit => 1)];  # 20
+  $g.player-hands.push($h1);
+  $g.player-hands.push($h2);
+  captured-out(-> { $g.play-more-hands; });
+  ok $h2.played, 'play-more-hands processes the hand when it becomes done';
+}
+
+# split-current-hand: cannot split → just get-action
+{
+  my $g = mk-game(<s q>);
+  fresh-dealer($g).cards = [Card.new(value => 9, suit => 0), Card.new(value => 8, suit => 0)];
+  dealer-of($g).hide-down-card = False;
+  my $ph = PlayerHand.new(game => $g, bet => 5.0);
+  $ph.cards = [Card.new(value => 4, suit => 0), Card.new(value => 5, suit => 0)];
+  $g.player-hands.push($ph);
+  captured-out(-> { $g.split-current-hand; });
+  is $g.player-hands.elems, 1, 'split-current-hand on non-pair does not add a hand';
+}
+
+# split-current-hand: successful split
+{
+  my $g = mk-game('s', 's', 'q');
+  install-shoe($g, deck-type => 5);  # sevens-only so the dealt card is predictable
+  fresh-dealer($g).cards = [Card.new(value => 9, suit => 0), Card.new(value => 8, suit => 0)];
+  dealer-of($g).hide-down-card = False;
+  my $ph = PlayerHand.new(game => $g, bet => 5.0);
+  $ph.cards = [Card.new(value => 7, suit => 0), Card.new(value => 7, suit => 1)];
+  $g.player-hands.push($ph);
+  captured-out(-> { $g.split-current-hand; });
+  is $g.player-hands.elems, 2, 'split-current-hand on pair creates a second hand';
+}
+
+# play-dealer-hand: eights-only shoe forces dealer to bust
+{
+  my $g = mk-game();
+  install-shoe($g, deck-type => 6);
+  fresh-dealer($g).cards = [Card.new(value => 7, suit => 0), Card.new(value => 7, suit => 1)];  # 8+8=16
+  dealer-of($g).hide-down-card = False;
+  my $ph = PlayerHand.new(game => $g, bet => 5.0);
+  $ph.cards = [Card.new(value => 8, suit => 0), Card.new(value => 8, suit => 1)];  # 9+9=18, not busted
+  $g.player-hands.push($ph);
+  my $start = $g.money;
+  captured-out(-> { $g.play-dealer-hand; });
+  ok dealer-of($g).is-busted, 'play-dealer-hand busts dealer drawing eights';
+  is $ph.status, Hand::Status::Won, 'player wins when dealer busts on eights';
+  is $g.money, $start + 5.0, 'player credited bet when dealer busts';
+}
+
+# split-current-hand: aces-only shoe drives splits up to max-player-hands (7)
+{
+  PlayerHand.total-player-hands = 0;
+  my $g = mk-game('p', 'p', 'p', 'p', 'p', 'p', 's', 's', 's', 's', 's', 's', 's', 'q');
+  install-shoe($g, deck-type => 2);
+  fresh-dealer($g).cards = [Card.new(value => 9, suit => 0), Card.new(value => 8, suit => 0)];  # T+9=19
+  dealer-of($g).hide-down-card = False;
+  my $ph = PlayerHand.new(game => $g, bet => 5.0);
+  $ph.cards = [Card.new(value => 0, suit => 0), Card.new(value => 0, suit => 1)];  # A,A
+  $g.player-hands.push($ph);
+  captured-out(-> { $ph.get-action; });
+  is $g.player-hands.elems, PlayerHand.max-player-hands,
+     'splitting aces fills player-hands to max-player-hands';
+}
+
+# split-current-hand: dealt card after split makes first hand done → process
+{
+  my $g = mk-game('q');
+  install-shoe($g, deck-type => 2);  # aces only → split tens + ace = 21 soft, is-done
+  fresh-dealer($g).cards = [Card.new(value => 9, suit => 0), Card.new(value => 8, suit => 0)];
+  dealer-of($g).hide-down-card = False;
+  my $ph = PlayerHand.new(game => $g, bet => 5.0);
+  $ph.cards = [Card.new(value => 9, suit => 0), Card.new(value => 9, suit => 1)];  # ten + ten
+  $g.player-hands.push($ph);
+  captured-out(-> { $g.split-current-hand; });
+  is $g.player-hands.elems, 2, 'split-current-hand auto-done branch creates two hands';
+  ok $g.player-hands[0].played, 'split-current-hand auto-done first hand processes';
+}
+
+# deal-new-hand: dealer up-card ace triggers ask-insurance flow
+{
+  my $g = mk-game('n', 's', 's', 'q', 'q');
+  install-shoe($g, deck-type => 2);  # aces only
+  captured-out(-> { $g.deal-new-hand; });
+  is $g.player-hands.elems, 1, 'deal-new-hand creates a player hand';
+  ok dealer-of($g).cards.elems >= 2, 'deal-new-hand deals at least two cards to dealer';
+}
+
+# deal-new-hand: player gets blackjack on initial deal → pay
+{
+  my $g = mk-game('n', 's', 's', 'q', 'q');
+  install-shoe($g, deck-type => 4);  # aces + jacks
+  captured-out(-> { $g.deal-new-hand; });
+  is $g.player-hands.elems, 1, 'deal-new-hand creates a player hand with deck-type=4';
+}
+
+# deal-new-hand: normal flow → player get-action, then dealer plays, then bet-options
+{
+  my $g = mk-game('s', 'q');
+  install-shoe($g, deck-type => 3);  # jacks → deterministic non-BJ, no insurance
+  captured-out(-> { $g.deal-new-hand; });
+  is $g.player-hands.elems, 1, 'deal-new-hand normal flow creates a player hand';
+}
+
+# deal-new-hand: shuffles when shoe needs to reshuffle (force empty shoe)
+{
+  my $g = mk-game('s', 'q');
+  install-shoe($g, deck-type => 3);
+  $g.shoe.get-next-card for 1..$g.shoe.get-total-cards;  # drain shoe
+  captured-out(-> { $g.deal-new-hand; });
+  is $g.player-hands.elems, 1, 'deal-new-hand reshuffles when shoe is empty';
+}
+
+# deal-new-hand: player gets blackjack on initial deal → player-done branch
+# fires deterministically. Rig the shoe so the last four cards (popped
+# in order) are: Ace (player), 5 (dealer up, not ace), King (player), 5 (dealer down).
+{
+  my $g = mk-game('q');
+  my $shoe = $g.shoe;
+  my $cards = $shoe.^attributes.first(*.name eq '@!cards').get_value($shoe);
+  $cards.push(
+    Card.new(value => 4, suit => 0),
+    Card.new(value => 12, suit => 0),
+    Card.new(value => 4, suit => 1),
+    Card.new(value => 0, suit => 0),
+  );
+  captured-out(-> { $g.deal-new-hand; });
+  ok $g.player-hands[0].is-blackjack,
+     'deal-new-hand player-BJ initial-deal hand is BJ';
+  is $g.player-hands[0].status, Hand::Status::Won,
+     'deal-new-hand player-BJ branch pays out via pay-hands';
+}
+
+# run: completes one iteration when bet-options gives q
+{
+  my $g = mk-game('s', 'q');
+  install-shoe($g, deck-type => 3);
+  captured-out(-> { $g.run; });
+  ok quitting-of($g), 'run sets quitting=True via bet-options q';
+}
+
+# PlayerHand.hit not-done branch → get-action chain (deterministic via sevens shoe).
+{
+  PlayerHand.total-player-hands = 0;
+  my $g = mk-game('s', 'q');
+  install-shoe($g, deck-type => 5);  # sevens-only → 5+5+7=17, not done
+  fresh-dealer($g).cards = [Card.new(value => 9, suit => 0), Card.new(value => 8, suit => 0)];
+  dealer-of($g).hide-down-card = False;
+  my $ph = PlayerHand.new(game => $g, bet => 5.0);
+  $ph.cards = [Card.new(value => 4, suit => 0), Card.new(value => 4, suit => 1)];
+  $g.player-hands.push($ph);
+  captured-out(-> { $ph.hit; });
+  is $ph.cards.elems, 3, 'PlayerHand.hit adds exactly one card';
+  nok $ph.is-busted,  'hit with sevens deck on a 10 does not bust';
+  ok $ph.stood,       'hit not-done branch chains into get-action and stands';
+}
+
+# PlayerHand.hit causes bust → process
+{
+  my $g = mk-game('q');
+  install-shoe($g, deck-type => 6);
+  PlayerHand.total-player-hands = 0;
+  fresh-dealer($g).cards = [Card.new(value => 9, suit => 0), Card.new(value => 8, suit => 0)];
+  dealer-of($g).hide-down-card = False;
+  my $ph = PlayerHand.new(game => $g, bet => 5.0);
+  $ph.cards = [Card.new(value => 9, suit => 0), Card.new(value => 9, suit => 1)];  # 20
+  $g.player-hands.push($ph);
+  captured-out(-> { $ph.hit; });
+  ok $ph.is-busted, 'PlayerHand.hit can lead to bust';
+  ok $ph.played,    'PlayerHand.hit that busts marks played';
+}
+
+# PlayerHand.stand sets stood/played and chains
+{
+  PlayerHand.total-player-hands = 0;
+  my $g = mk-game(<q>);
+  fresh-dealer($g).cards = [Card.new(value => 9, suit => 0), Card.new(value => 8, suit => 0)];
+  dealer-of($g).hide-down-card = False;
+  my $ph = PlayerHand.new(game => $g, bet => 5.0);
+  $ph.cards = [Card.new(value => 9, suit => 0), Card.new(value => 9, suit => 1)];  # 20
+  $g.player-hands.push($ph);
+  captured-out(-> { $ph.stand; });
+  ok $ph.stood,  'PlayerHand.stand sets stood';
+  ok $ph.played, 'PlayerHand.stand sets played';
+}
+
+# PlayerHand.stand with more hands to play → play-more-hands
+{
+  PlayerHand.total-player-hands = 0;
+  my $g = mk-game(<s q>);
+  fresh-dealer($g).cards = [Card.new(value => 9, suit => 0), Card.new(value => 8, suit => 0)];
+  dealer-of($g).hide-down-card = False;
+  my $h1 = PlayerHand.new(game => $g, bet => 5.0);
+  $h1.cards = [Card.new(value => 9, suit => 0), Card.new(value => 9, suit => 1)];
+  my $h2 = PlayerHand.new(game => $g, bet => 5.0);
+  $h2.cards = [Card.new(value => 5, suit => 0)];
+  $g.player-hands.push($h1);
+  $g.player-hands.push($h2);
+  captured-out(-> { $h1.stand; });
+  is $g.current-player-hand, 1, 'PlayerHand.stand advances to next hand when more remain';
+}
+
+# PlayerHand.dbl doubles bet, deals a card, marks played
+{
+  PlayerHand.total-player-hands = 0;
+  my $g = mk-game(<q>);
+  fresh-dealer($g).cards = [Card.new(value => 9, suit => 0), Card.new(value => 8, suit => 0)];
+  dealer-of($g).hide-down-card = False;
+  my $ph = PlayerHand.new(game => $g, bet => 5.0);
+  $ph.cards = [Card.new(value => 4, suit => 0), Card.new(value => 5, suit => 0)];
+  $g.player-hands.push($ph);
+  captured-out(-> { $ph.dbl; });
+  is $ph.bet, 10.0,           'PlayerHand.dbl doubles bet';
+  ok $ph.played,              'PlayerHand.dbl marks played';
+  is $ph.cards.elems, 3,      'PlayerHand.dbl deals exactly one card';
+}
+
+# PlayerHand.process with more hands → play-more-hands
+{
+  PlayerHand.total-player-hands = 0;
+  my $g = mk-game(<s q>);
+  fresh-dealer($g).cards = [Card.new(value => 9, suit => 0), Card.new(value => 8, suit => 0)];
+  dealer-of($g).hide-down-card = False;
+  my $h1 = PlayerHand.new(game => $g, bet => 5.0);
+  $h1.cards = [Card.new(value => 9, suit => 0), Card.new(value => 9, suit => 1)];
+  my $h2 = PlayerHand.new(game => $g, bet => 5.0);
+  $h2.cards = [Card.new(value => 5, suit => 0)];
+  $g.player-hands.push($h1);
+  $g.player-hands.push($h2);
+  captured-out(-> { $h1.process; });
+  is $g.current-player-hand, 1, 'PlayerHand.process with more hands → play-more-hands';
+}
+
+# PlayerHand.process with no more hands → play-dealer + bet-options
+{
+  PlayerHand.total-player-hands = 0;
+  my $g = mk-game(<q>);
+  fresh-dealer($g).cards = [Card.new(value => 9, suit => 0), Card.new(value => 8, suit => 0)];
+  dealer-of($g).hide-down-card = False;
+  my $ph = PlayerHand.new(game => $g, bet => 5.0);
+  $ph.cards = [Card.new(value => 9, suit => 0), Card.new(value => 9, suit => 1)];
+  $ph.played = True;
+  $g.player-hands.push($ph);
+  captured-out(-> { $ph.process; });
+  ok quitting-of($g), 'PlayerHand.process drives play-dealer-hand + bet-options';
+}
+
+# PlayerHand.get-action: h
+{
+  PlayerHand.total-player-hands = 0;
+  my $g = mk-game(<h s q>);
+  fresh-dealer($g).cards = [Card.new(value => 9, suit => 0), Card.new(value => 8, suit => 0)];
+  dealer-of($g).hide-down-card = False;
+  my $ph = PlayerHand.new(game => $g, bet => 5.0);
+  $ph.cards = [Card.new(value => 4, suit => 0), Card.new(value => 5, suit => 0)];
+  $g.player-hands.push($ph);
+  captured-out(-> { $ph.get-action; });
+  ok $ph.cards.elems >= 3, 'get-action h triggers hit';
+}
+
+# PlayerHand.get-action: s
+{
+  PlayerHand.total-player-hands = 0;
+  my $g = mk-game(<s q>);
+  fresh-dealer($g).cards = [Card.new(value => 9, suit => 0), Card.new(value => 8, suit => 0)];
+  dealer-of($g).hide-down-card = False;
+  my $ph = PlayerHand.new(game => $g, bet => 5.0);
+  $ph.cards = [Card.new(value => 9, suit => 0), Card.new(value => 9, suit => 1)];
+  $g.player-hands.push($ph);
+  captured-out(-> { $ph.get-action; });
+  ok $ph.stood, 'get-action s triggers stand';
+}
+
+# PlayerHand.get-action: p
+{
+  my $g = mk-game('p', 's', 's', 'q');
+  install-shoe($g, deck-type => 5);
+  PlayerHand.total-player-hands = 0;
+  fresh-dealer($g).cards = [Card.new(value => 9, suit => 0), Card.new(value => 8, suit => 0)];
+  dealer-of($g).hide-down-card = False;
+  my $ph = PlayerHand.new(game => $g, bet => 5.0);
+  $ph.cards = [Card.new(value => 7, suit => 0), Card.new(value => 7, suit => 1)];
+  $g.player-hands.push($ph);
+  captured-out(-> { $ph.get-action; });
+  is $g.player-hands.elems, 2, 'get-action p triggers split';
+}
+
+# PlayerHand.get-action: d
+{
+  PlayerHand.total-player-hands = 0;
+  my $g = mk-game(<d q>);
+  fresh-dealer($g).cards = [Card.new(value => 9, suit => 0), Card.new(value => 8, suit => 0)];
+  dealer-of($g).hide-down-card = False;
+  my $ph = PlayerHand.new(game => $g, bet => 5.0);
+  $ph.cards = [Card.new(value => 4, suit => 0), Card.new(value => 5, suit => 0)];
+  $g.player-hands.push($ph);
+  captured-out(-> { $ph.get-action; });
+  is $ph.bet, 10.0, 'get-action d triggers dbl';
+}
+
+# PlayerHand.get-action: default char recurses
+{
+  PlayerHand.total-player-hands = 0;
+  my $g = mk-game(<x s q>);
+  fresh-dealer($g).cards = [Card.new(value => 9, suit => 0), Card.new(value => 8, suit => 0)];
+  dealer-of($g).hide-down-card = False;
+  my $ph = PlayerHand.new(game => $g, bet => 5.0);
+  $ph.cards = [Card.new(value => 9, suit => 0), Card.new(value => 9, suit => 1)];
+  $g.player-hands.push($ph);
+  captured-out(-> { $ph.get-action; });
+  ok $ph.stood, 'get-action default char recurses, next char takes effect';
+}
+
+# get-action: 'h' when can-hit is False is a no-op; loop continues to next char.
+# Hand [7,7,7]=21 hard → can-hit False (21==hard), can-stand True.
+{
+  PlayerHand.total-player-hands = 0;
+  my $g = mk-game('h', 's', 'q');
+  fresh-dealer($g).cards = [Card.new(value => 9, suit => 0), Card.new(value => 8, suit => 0)];
+  dealer-of($g).hide-down-card = False;
+  my $ph = PlayerHand.new(game => $g, bet => 5.0);
+  $ph.cards = [
+    Card.new(value => 6, suit => 0),
+    Card.new(value => 6, suit => 1),
+    Card.new(value => 6, suit => 2),
+  ];
+  $g.player-hands.push($ph);
+  captured-out(-> { $ph.get-action; });
+  is $ph.cards.elems, 3, 'get-action h on hard-21 does not add a card';
+  ok $ph.stood,           'get-action h on hard-21 is a no-op, then s stands';
+}
+
+# get-action: 'p' when can-split is False is a no-op; loop continues.
+# Hand [5,6] (different values) → can-split False, can-stand True.
+{
+  PlayerHand.total-player-hands = 0;
+  my $g = mk-game('p', 's', 'q');
+  fresh-dealer($g).cards = [Card.new(value => 9, suit => 0), Card.new(value => 8, suit => 0)];
+  dealer-of($g).hide-down-card = False;
+  my $ph = PlayerHand.new(game => $g, bet => 5.0);
+  $ph.cards = [Card.new(value => 4, suit => 0), Card.new(value => 5, suit => 0)];
+  $g.player-hands.push($ph);
+  captured-out(-> { $ph.get-action; });
+  is $g.player-hands.elems, 1, 'get-action p on non-pair does not split';
+  ok $ph.stood,                'get-action p on non-pair is a no-op, then s stands';
+}
+
+# get-action: 'd' when can-dbl is False is a no-op; loop continues.
+# Hand with 3 cards → can-dbl False, can-stand True.
+{
+  PlayerHand.total-player-hands = 0;
+  my $g = mk-game('d', 's', 'q');
+  fresh-dealer($g).cards = [Card.new(value => 9, suit => 0), Card.new(value => 8, suit => 0)];
+  dealer-of($g).hide-down-card = False;
+  my $ph = PlayerHand.new(game => $g, bet => 5.0);
+  $ph.cards = [
+    Card.new(value => 1, suit => 0),
+    Card.new(value => 2, suit => 0),
+    Card.new(value => 3, suit => 0),
+  ];
+  $g.player-hands.push($ph);
+  captured-out(-> { $ph.get-action; });
+  is $ph.bet, 5.0, 'get-action d on a 3-card hand does not double the bet';
+  ok $ph.stood,    'get-action d on a 3-card hand is a no-op, then s stands';
+}
+
+# reset
+Shoe.num-decks = 8;
+Shoe.deck-type = 1;
+Card.face-type = 1;
+PlayerHand.total-player-hands = 0;
+
+done-testing;

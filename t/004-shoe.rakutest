@@ -1,0 +1,132 @@
+#!/usr/bin/env raku
+
+use v6;
+use lib 'lib';
+use Test;
+use Console::Blackjack::Shoe;
+use Console::Blackjack::Card;
+
+plan 27;
+
+# class accessors
+Shoe.num-decks = 1;
+Shoe.deck-type = 1;
+is Shoe.num-decks, 1, 'num-decks is settable to 1';
+is Shoe.deck-type, 1, 'deck-type is settable to 1';
+is Shoe.cards-per-deck, 52, 'cards-per-deck is 52';
+
+# get-total-cards
+Shoe.num-decks = 1;
+my $shoe = Shoe.new;
+is $shoe.get-total-cards, 52, 'get-total-cards returns 52 for 1 deck';
+
+Shoe.num-decks = 8;
+$shoe = Shoe.new;
+is $shoe.get-total-cards, 8 * 52, 'get-total-cards returns 416 for 8 decks';
+
+# regular shoe: 52 cards per deck, all 13 ranks
+Shoe.num-decks = 1;
+Shoe.deck-type = 1;
+$shoe = Shoe.new;
+my @cards;
+@cards.push($shoe.get-next-card) for 1..52;
+is @cards.elems, 52, 'regular 1-deck shoe yields 52 cards';
+is @cards.grep({ .is-ace }).elems,    4, 'regular deck has 4 aces';
+is @cards.grep({ .value == 12 }).elems, 4, 'regular deck has 4 kings';
+
+# aces shoe
+Shoe.num-decks = 1;
+Shoe.deck-type = 2;
+$shoe = Shoe.new;
+my @ace-cards;
+@ace-cards.push($shoe.get-next-card) for 1..52;
+ok @ace-cards.all.is-ace, 'aces-only shoe contains only aces';
+
+# jacks shoe
+Shoe.num-decks = 1;
+Shoe.deck-type = 3;
+$shoe = Shoe.new;
+my @jack-cards;
+@jack-cards.push($shoe.get-next-card) for 1..52;
+ok @jack-cards.all.value == 10, 'jacks-only shoe contains only jacks';
+
+# aces & jacks shoe
+Shoe.num-decks = 1;
+Shoe.deck-type = 4;
+$shoe = Shoe.new;
+my @aj-cards;
+@aj-cards.push($shoe.get-next-card) for 1..52;
+is @aj-cards.grep({ .value == 0 || .value == 10 }).elems, 52, 'aces-jacks shoe contains only aces and jacks';
+
+# sevens shoe
+Shoe.num-decks = 1;
+Shoe.deck-type = 5;
+$shoe = Shoe.new;
+my @seven-cards;
+@seven-cards.push($shoe.get-next-card) for 1..52;
+ok @seven-cards.all.value == 6, 'sevens-only shoe contains only sevens';
+
+# eights shoe
+Shoe.num-decks = 1;
+Shoe.deck-type = 6;
+$shoe = Shoe.new;
+my @eight-cards;
+@eight-cards.push($shoe.get-next-card) for 1..52;
+ok @eight-cards.all.value == 7, 'eights-only shoe contains only eights';
+
+# get-next-card returns a Card
+Shoe.num-decks = 1;
+Shoe.deck-type = 1;
+$shoe = Shoe.new;
+my $card = $shoe.get-next-card;
+isa-ok $card, Card, 'get-next-card returns a Card';
+
+# need-to-shuffle: empty shoe always returns True
+Shoe.num-decks = 1;
+Shoe.deck-type = 1;
+$shoe = Shoe.new;
+$shoe.get-next-card for 1..52;
+ok $shoe.need-to-shuffle, 'need-to-shuffle is True when shoe is empty';
+
+# need-to-shuffle: fresh shoe returns False
+Shoe.num-decks = 1;
+Shoe.deck-type = 1;
+$shoe = Shoe.new;
+nok $shoe.need-to-shuffle, 'need-to-shuffle is False on a freshly-built shoe';
+
+# need-to-shuffle thresholds for each deck size
+my %threshold = (1 => 80, 2 => 81, 3 => 82, 4 => 84, 5 => 86, 6 => 89, 7 => 92, 8 => 95);
+
+for %threshold.kv -> $decks, $pct {
+  Shoe.num-decks = $decks.Int;
+  Shoe.deck-type = 1;
+  $shoe = Shoe.new;
+  my Int $total = $decks.Int * 52;
+  my Int $to-deal = (($pct + 1) / 100 * $total).Int;
+  $shoe.get-next-card for 1..$to-deal;
+  ok $shoe.need-to-shuffle, "need-to-shuffle is True for $decks deck(s) past $pct% used";
+}
+
+# shuffle randomizes order (low chance of accidental equality)
+Shoe.num-decks = 1;
+Shoe.deck-type = 1;
+my $a = Shoe.new;
+my $b = Shoe.new;
+my @a-cards = (1..52).map({ $a.get-next-card.value });
+my @b-cards = (1..52).map({ $b.get-next-card.value });
+nok @a-cards eqv @b-cards, 'two fresh shoes shuffle to different orders';
+
+# multi-deck regular shoe yields the expected count
+Shoe.num-decks = 2;
+Shoe.deck-type = 1;
+$shoe = Shoe.new;
+my @two-deck;
+@two-deck.push($shoe.get-next-card) for 1..104;
+is @two-deck.elems, 104, '2-deck regular shoe yields 104 cards';
+is @two-deck.grep({ .is-ace }).elems, 8, '2-deck regular shoe has 8 aces';
+
+# reset to defaults
+Shoe.num-decks = 8;
+Shoe.deck-type = 1;
+
+done-testing;

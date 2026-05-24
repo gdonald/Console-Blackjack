@@ -2,3 +2,4 @@
 bj.txt
 .DS_Store
 .fezignore
+.behave-failures

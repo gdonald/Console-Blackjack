@@ -1,0 +1,134 @@
+#!/usr/bin/env raku
+
+use v6;
+use lib 'lib';
+use Test;
+use Console::Blackjack;
+use Console::Blackjack::Hand;
+use Console::Blackjack::DealerHand;
+use Console::Blackjack::Card;
+use Console::Blackjack::PlayerHand;
+
+plan 23;
+
+my $orig-cwd = $*CWD;
+my $tmpdir = ($*TMPDIR ~ '/console-blackjack-dealer-' ~ $*PID).IO;
+$tmpdir.mkdir;
+chdir $tmpdir;
+
+LEAVE {
+  chdir $orig-cwd;
+  for $tmpdir.dir -> $f { $f.unlink if $f.f; }
+  $tmpdir.rmdir;
+}
+
+PlayerHand.total-player-hands = 0;
+my $game = Game.new;
+my $dh = DealerHand.new(game => $game);
+isa-ok $dh, DealerHand, 'DealerHand.new returns a DealerHand';
+isa-ok $dh, Hand, 'DealerHand is a Hand';
+ok $dh.hide-down-card, 'hide-down-card defaults to True';
+
+# up-card-is-ace
+my $with-ace-up = DealerHand.new(game => $game);
+$with-ace-up.cards = [Card.new(value => 0, suit => 0), Card.new(value => 5, suit => 0)];
+ok $with-ace-up.up-card-is-ace, 'up-card-is-ace returns True when first card is an ace';
+
+my $without-ace-up = DealerHand.new(game => $game);
+$without-ace-up.cards = [Card.new(value => 5, suit => 0), Card.new(value => 0, suit => 0)];
+nok $without-ace-up.up-card-is-ace, 'up-card-is-ace returns False when first card is not an ace';
+
+# get-value: down card hidden, only first card counts (Soft)
+my $hidden = DealerHand.new(game => $game);
+$hidden.cards = [Card.new(value => 0, suit => 0), Card.new(value => 12, suit => 0)];
+$hidden.hide-down-card = True;
+is $hidden.get-value(Hand::CountMethod::Soft), 11, 'Soft value with hidden down card uses only up card (Ace soft = 11)';
+
+# get-value: down card hidden, hard count
+is $hidden.get-value(Hand::CountMethod::Hard), 1, 'Hard value with hidden down card and Ace up = 1';
+
+# get-value: down card revealed, full count (blackjack)
+my $bj = DealerHand.new(game => $game);
+$bj.cards = [Card.new(value => 0, suit => 0), Card.new(value => 12, suit => 0)];
+$bj.hide-down-card = False;
+is $bj.get-value(Hand::CountMethod::Soft), 21, 'Ace + King revealed = 21 soft';
+is $bj.get-value(Hand::CountMethod::Hard), 11, 'Ace + King revealed = 11 hard';
+
+# get-value: two tens (20)
+my $twenty = DealerHand.new(game => $game);
+$twenty.cards = [Card.new(value => 12, suit => 0), Card.new(value => 9, suit => 0)];
+$twenty.hide-down-card = False;
+is $twenty.get-value(Hand::CountMethod::Soft), 20, 'King + Ten = 20 soft';
+
+# get-value: soft converts to hard when total > 21
+my $soft-to-hard = DealerHand.new(game => $game);
+$soft-to-hard.cards = [
+  Card.new(value => 0, suit => 0),
+  Card.new(value => 5, suit => 0),
+  Card.new(value => 8, suit => 0),
+];
+$soft-to-hard.hide-down-card = False;
+is $soft-to-hard.get-value(Hand::CountMethod::Soft), 16, 'Ace+6+9 soft falls back to hard (1+6+9=16)';
+
+# get-value: ace can be soft when total stays <= 21
+my $ace-stays-soft = DealerHand.new(game => $game);
+$ace-stays-soft.cards = [Card.new(value => 0, suit => 0), Card.new(value => 5, suit => 0)];
+$ace-stays-soft.hide-down-card = False;
+is $ace-stays-soft.get-value(Hand::CountMethod::Soft), 17, 'Ace + 6 = 17 soft';
+is $ace-stays-soft.get-value(Hand::CountMethod::Hard), 7,  'Ace + 6 = 7 hard';
+
+# get-value: face cards (J/Q/K) all count as 10
+my $faces = DealerHand.new(game => $game);
+$faces.cards = [Card.new(value => 10, suit => 0), Card.new(value => 11, suit => 0)];
+$faces.hide-down-card = False;
+is $faces.get-value(Hand::CountMethod::Soft), 20, 'Jack + Queen = 20';
+
+# get-value: bust
+my $busted = DealerHand.new(game => $game);
+$busted.cards = [
+  Card.new(value => 9, suit => 0),
+  Card.new(value => 9, suit => 0),
+  Card.new(value => 9, suit => 0),
+];
+$busted.hide-down-card = False;
+is $busted.get-value(Hand::CountMethod::Soft), 30, '10+10+10 = 30 (busted)';
+ok $busted.is-busted, 'is-busted returns True when value > 21';
+
+# is-blackjack via inherited method
+my $is-bj = DealerHand.new(game => $game);
+$is-bj.cards = [Card.new(value => 0, suit => 0), Card.new(value => 11, suit => 0)];
+ok $is-bj.is-blackjack, 'Ace + Queen is blackjack';
+
+# played accessor (rw)
+my $played = DealerHand.new(game => $game);
+$played.played = True;
+ok $played.played, 'played is settable';
+
+# hide-down-card accessor
+my $hdc = DealerHand.new(game => $game);
+$hdc.hide-down-card = False;
+nok $hdc.hide-down-card, 'hide-down-card is rw';
+
+# draw: prints cards and value; capture STDOUT
+my $draw = DealerHand.new(game => $game);
+$draw.cards = [Card.new(value => 0, suit => 0), Card.new(value => 12, suit => 0)];
+$draw.hide-down-card = True;
+my $captured = '';
+{
+  my $*OUT = class { method print(*@a) { $captured ~= @a.join; }; method say(*@a) { $captured ~= @a.join ~ "\n"; }; method flush {} }.new;
+  $draw.draw;
+}
+ok $captured.contains('A♠'),       'draw renders the up card';
+ok $captured.contains('??'),       'draw renders ?? for hidden down card';
+ok $captured.contains('⇒'),        'draw renders the value separator';
+
+# reveal then draw includes the actual down card
+$draw.hide-down-card = False;
+$captured = '';
+{
+  my $*OUT = class { method print(*@a) { $captured ~= @a.join; }; method say(*@a) { $captured ~= @a.join ~ "\n"; }; method flush {} }.new;
+  $draw.draw;
+}
+ok $captured.contains('K♠'),       'draw renders the down card when revealed';
+
+done-testing;
