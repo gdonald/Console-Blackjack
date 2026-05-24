@@ -1,5 +1,5 @@
-use BDD::Behave;
 use lib 'lib';
+use BDD::Behave;
 use Console::Blackjack::Card;
 
 describe 'Console::Blackjack::Card', {

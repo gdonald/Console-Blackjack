@@ -1,5 +1,5 @@
-use BDD::Behave;
 use lib 'lib';
+use BDD::Behave;
 use Console::Blackjack;
 use Console::Blackjack::Shoe;
 use Console::Blackjack::DealerHand;
