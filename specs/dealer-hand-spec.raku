@@ -11,6 +11,7 @@ describe 'Console::Blackjack::DealerHand', {
   let(:orig-cwd, { $*CWD });
 
   before-each {
+    $*LET-RUNTIME.value('orig-cwd');
     my $tmp = $*LET-RUNTIME.value('tmpdir');
     $tmp.mkdir unless $tmp.e;
     chdir $tmp;
