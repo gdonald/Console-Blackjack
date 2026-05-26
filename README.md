@@ -37,7 +37,7 @@ raku -Ilib bin/console-blackjack
 ```
 ### Status
 
-[![.github/workflows/ci.yml](https://github.com/gdonald/Console-Blackjack/workflows/.github/workflows/ci.yml/badge.svg)](https://github.com/gdonald/Console-Blackjack/actions)
+[![CI](https://github.com/gdonald/Console-Blackjack/actions/workflows/ci.yml/badge.svg)](https://github.com/gdonald/Console-Blackjack/actions/workflows/ci.yml)
 
 ### Bugs / Issues / Feature Requests 
 
