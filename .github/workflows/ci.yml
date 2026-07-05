@@ -22,6 +22,10 @@ jobs:
           key: zef-ubuntu-latest-${{ hashFiles('META6.json') }}
           restore-keys: |
             zef-ubuntu-latest-
+
+      - name: Install from github
+        run: |
+          zef install --/test https://github.com/gdonald/BDD::Behave.git
       - name: Install dependencies
         run: zef install --deps-only --/test --test-depends .
       - name: Install prove6
