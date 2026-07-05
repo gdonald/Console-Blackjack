@@ -25,7 +25,7 @@ jobs:
 
       - name: Install from github
         run: |
-          zef install --/test https://github.com/gdonald/BDD::Behave.git
+          zef install --/test https://github.com/gdonald/BDD-Behave.git
       - name: Install dependencies
         run: zef install --deps-only --/test --test-depends .
       - name: Install prove6
