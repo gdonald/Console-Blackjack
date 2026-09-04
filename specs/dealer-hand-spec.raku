@@ -171,7 +171,7 @@ describe 'Console::Blackjack::DealerHand', {
   }
 
   describe 'is-blackjack via inherited Hand method', {
-    it 'recognises Ace + Queen as blackjack', {
+    it 'recognizes Ace + Queen as blackjack', {
       my $g = Game.new;
       my $d = DealerHand.new(game => $g);
       $d.cards = [Card.new(value => 0, suit => 0), Card.new(value => 11, suit => 0)];
